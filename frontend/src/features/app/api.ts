@@ -97,3 +97,13 @@ export function updateCheckInConfig(input: Omit<CheckInConfig, "nextScheduledAt"
 export function getEmergencyProfile(petId: string) {
   return apiRequest<EmergencyProfileView>(`/pets/${petId}/emergency-profile`);
 }
+
+export function getPublicEmergencyProfile(token: string) {
+  return apiRequest<EmergencyProfileView>(`/public/emergency-profile/${token}`);
+}
+
+export function getEmergencyAccessToken(petId: string) {
+  return apiRequest<{ access_token: string }>(
+    `/pets/${petId}/emergency-access-token`,
+  );
+}

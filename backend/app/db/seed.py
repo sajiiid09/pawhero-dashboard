@@ -1,10 +1,18 @@
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import select
 
 from app.core.config import get_settings
-from app.db.models import CheckInConfig, CheckInEvent, EmergencyChainEntry, EmergencyContact, Owner, Pet
+from app.db.models import (
+    CheckInConfig,
+    CheckInEvent,
+    EmergencyChainEntry,
+    EmergencyContact,
+    Owner,
+    Pet,
+)
 from app.db.session import get_session_factory
+from app.services.auth import hash_password
 
 
 def seed_demo_data() -> None:
@@ -20,16 +28,18 @@ def seed_demo_data() -> None:
             id=settings.demo_owner_id,
             email="demo@pfoten-held.de",
             display_name="Pfoten-Held Demo",
+            password_hash=hash_password("demo1234"),
         )
         session.add(owner)
 
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
 
         session.add_all(
             [
                 Pet(
                     id="pet-bello",
                     owner_id=owner.id,
+                    emergency_access_token="token-bello-public",
                     name="Bello",
                     breed="Schaeferhund",
                     age_years=5,
@@ -52,6 +62,7 @@ def seed_demo_data() -> None:
                 Pet(
                     id="pet-luna",
                     owner_id=owner.id,
+                    emergency_access_token="token-luna-public",
                     name="Luna",
                     breed="Mischling",
                     age_years=3,

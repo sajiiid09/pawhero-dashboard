@@ -15,6 +15,11 @@ class Settings(BaseSettings):
         validation_alias=AliasChoices("CORS_ORIGINS"),
     )
     demo_owner_id: str = "owner-demo"
+    jwt_secret_key: str = Field(
+        default="change-me-in-production",
+        validation_alias=AliasChoices("JWT_SECRET_KEY"),
+    )
+    jwt_access_token_expire_minutes: int = 60
 
     model_config = SettingsConfigDict(
         env_file=".env",

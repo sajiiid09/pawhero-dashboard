@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 from sqlalchemy.orm import Session
 
@@ -8,7 +8,7 @@ from app.schemas.check_in import CheckInConfigDTO, CheckInConfigUpdateRequest
 
 
 def recompute_next_scheduled_at(interval_hours: int) -> datetime:
-    return datetime.now(timezone.utc) + timedelta(hours=interval_hours)
+    return datetime.now(UTC) + timedelta(hours=interval_hours)
 
 
 def save_check_in_config(

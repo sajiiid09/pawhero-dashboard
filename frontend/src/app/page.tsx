@@ -1,11 +1,20 @@
-import type { Metadata } from "next";
-import { redirect } from "next/navigation";
+"use client";
 
-export const metadata: Metadata = {
-  title: "Pfoten-Held Dashboard",
-  description: "Weiterleitung zur Dashboard-Uebersicht von Pfoten-Held.",
-};
+import { useRouter } from "next/navigation";
+import { useEffect } from "react";
+
+import { useAuth } from "@/features/auth/auth-context";
+import { useHydrated } from "@/lib/use-hydrated";
 
 export default function HomePage() {
-  redirect("/dashboard");
+  const { isAuthenticated } = useAuth();
+  const router = useRouter();
+  const mounted = useHydrated();
+
+  useEffect(() => {
+    if (!mounted) return;
+    router.replace(isAuthenticated ? "/dashboard" : "/login");
+  }, [isAuthenticated, mounted, router]);
+
+  return null;
 }

@@ -3,6 +3,7 @@ from sqlalchemy.orm import Session
 
 from app.db.models import Pet
 from app.schemas.pets import PetUpsertRequest
+from app.services.auth import generate_id
 
 
 def list_pets(session: Session, owner_id: str) -> list[Pet]:
@@ -17,11 +18,15 @@ def get_pet(session: Session, owner_id: str, pet_id: str) -> Pet | None:
     return session.scalar(statement)
 
 
+def get_pet_by_access_token(session: Session, token: str) -> Pet | None:
+    return session.scalar(select(Pet).where(Pet.emergency_access_token == token))
+
+
 def save_pet(session: Session, owner_id: str, pet_id: str, payload: PetUpsertRequest) -> Pet:
     pet = get_pet(session, owner_id, pet_id)
 
     if pet is None:
-        pet = Pet(id=pet_id, owner_id=owner_id)
+        pet = Pet(id=pet_id, owner_id=owner_id, emergency_access_token=generate_id())
         session.add(pet)
 
     pet.name = payload.name

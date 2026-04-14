@@ -16,6 +16,7 @@ import {
   getEmergencyChain,
   getEmergencyContact,
   getEmergencyProfile,
+  getPublicEmergencyProfile,
   getPet,
   getPets,
   moveEmergencyContact,
@@ -200,6 +201,14 @@ export function useEmergencyProfileQuery(petId: string) {
     queryKey: appQueryKeys.emergencyProfile(petId),
     queryFn: () => getEmergencyProfile(petId),
     enabled: Boolean(petId),
+  });
+}
+
+export function usePublicEmergencyProfileQuery(token: string) {
+  return useQuery({
+    queryKey: ["public-emergency-profile", token],
+    queryFn: () => getPublicEmergencyProfile(token),
+    enabled: Boolean(token),
   });
 }
 

@@ -1,6 +1,5 @@
 from sqlalchemy.orm import Session
 
-from app.db.models import EmergencyChainEntry
 from app.repositories import emergency_chain as emergency_chain_repository
 from app.schemas.emergency_chain import EmergencyChainContactDTO
 

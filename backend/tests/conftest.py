@@ -6,14 +6,16 @@ from uuid import uuid4
 
 import psycopg
 import pytest
-from alembic import command
 from alembic.config import Config
 from fastapi.testclient import TestClient
 
-from app.core.config import get_settings
+from alembic import command
 from app.db.seed import seed_demo_data
 from app.db.session import reset_database_state
 from app.main import app
+from app.services.auth import create_access_token
+
+DEMO_OWNER_ID = "owner-demo"
 
 
 @pytest.fixture(scope="session")
@@ -49,6 +51,12 @@ def test_database_url() -> Iterator[str]:
                     (database_name,),
                 )
                 cursor.execute(f'DROP DATABASE IF EXISTS "{database_name}"')
+
+
+@pytest.fixture()
+def auth_headers() -> dict[str, str]:
+    token = create_access_token(DEMO_OWNER_ID)
+    return {"Authorization": f"Bearer {token}"}
 
 
 @pytest.fixture()

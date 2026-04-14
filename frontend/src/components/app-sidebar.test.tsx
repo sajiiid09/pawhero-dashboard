@@ -6,6 +6,10 @@ import { AppSidebar } from "@/components/app-sidebar";
 
 vi.mock("next/navigation", () => ({
   usePathname: () => "/dashboard",
+  useRouter: () => ({
+    push: vi.fn(),
+    replace: vi.fn(),
+  }),
 }));
 
 vi.mock("@/features/app/hooks", () => ({
@@ -16,6 +20,15 @@ vi.mock("@/features/app/hooks", () => ({
         name: "Bello",
       },
     ],
+  }),
+}));
+
+vi.mock("@/features/auth/auth-context", () => ({
+  useAuth: () => ({
+    logout: vi.fn(),
+    user: { ownerId: "owner-demo", displayName: "Demo", email: "demo@test.de" },
+    token: "test-token",
+    isAuthenticated: true,
   }),
 }));
 
