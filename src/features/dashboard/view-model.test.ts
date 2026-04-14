@@ -1,0 +1,31 @@
+import { describe, expect, it } from "vitest";
+
+import {
+  formatCheckInTime,
+  formatRelativeCheckIn,
+  getCheckInMethodLabel,
+} from "@/features/dashboard/view-model";
+
+describe("dashboard view-model", () => {
+  it("formats recent history timestamps in German copy", () => {
+    const now = new Date("2026-04-15T12:00:00+06:00");
+
+    expect(formatCheckInTime("2026-04-15T08:00:00+06:00", now)).toBe(
+      "Heute, 08:00 Uhr",
+    );
+    expect(formatCheckInTime("2026-04-14T20:00:00+06:00", now)).toBe(
+      "Gestern, 20:00 Uhr",
+    );
+  });
+
+  it("formats the countdown label for the next check-in", () => {
+    const now = new Date("2026-04-15T15:18:00+06:00");
+
+    expect(formatRelativeCheckIn("2026-04-15T16:00:00+06:00", now)).toBe("in 42 Min");
+  });
+
+  it("maps check-in methods to user-facing labels", () => {
+    expect(getCheckInMethodLabel("push")).toBe("Push-Nachricht");
+    expect(getCheckInMethodLabel("webapp")).toBe("Web-App");
+  });
+});
