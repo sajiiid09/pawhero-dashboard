@@ -9,10 +9,15 @@ import { MotionPage, MotionSection } from "@/components/ui/motion";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   useCheckInConfigQuery,
+  useCheckInEventsQuery,
+  useEscalationHistoryQuery,
   useUpdateCheckInConfigMutation,
 } from "@/features/app/hooks";
 import type { CheckInConfigInput } from "@/features/app/types";
+import { CheckInHistorySection } from "@/features/dashboard/components/check-in-history-section";
+import type { CheckInHistoryItem } from "@/features/dashboard/types";
 import { formatCheckInTime, getCheckInMethodLabel } from "@/features/dashboard/view-model";
+import { EscalationHistoryCard } from "@/features/check-in/components/escalation-history-card";
 
 const intervalOptions = [6, 8, 12, 24] as const;
 const escalationOptions = [15, 30, 60, 120] as const;
@@ -200,6 +205,35 @@ export function CheckInPage() {
           </section>
         </div>
       </MotionSection>
+
+      <MotionSection>
+        <div className="grid gap-4 xl:grid-cols-[minmax(0,1.4fr)_minmax(300px,0.9fr)]">
+          <CheckInEventHistorySection />
+          <EscalationHistorySection />
+        </div>
+      </MotionSection>
     </MotionPage>
   );
+}
+
+function CheckInEventHistorySection() {
+  const { data: events, isLoading } = useCheckInEventsQuery();
+
+  if (isLoading) {
+    return <Skeleton className="h-[320px] rounded-[var(--radius-card)]" />;
+  }
+
+  return (
+    <CheckInHistorySection items={(events ?? []) as CheckInHistoryItem[]} />
+  );
+}
+
+function EscalationHistorySection() {
+  const { data: events, isLoading } = useEscalationHistoryQuery();
+
+  if (isLoading) {
+    return <Skeleton className="h-[320px] rounded-[var(--radius-card)]" />;
+  }
+
+  return <EscalationHistoryCard events={events ?? []} />;
 }

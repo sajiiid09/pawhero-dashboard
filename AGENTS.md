@@ -97,3 +97,29 @@ Backend tests (`conftest.py`) create a **temporary PostgreSQL database** per ses
 - **Mutations invalidate related queries**: Follow the pattern in `src/features/app/hooks.ts` — `onSuccess` invalidates dependent query keys.
 - **ESLint**: Uses `eslint-config-next` with core-web-vitals + TypeScript configs.
 - **Backend linting**: Ruff with rules `E, F, I, B, UP, N`. Line length 100. Target Python 3.12. B008 ignored in `dependencies.py` (standard FastAPI `Depends()` pattern).
+
+## Check-In Engine (Phase 5)
+
+### Backend
+- **Escalation state machine** (on-demand, no scheduler): `compute_escalation_state()` in `app/services/check_in.py`
+  - `NORMAL`: now < next_scheduled_at
+  - `PENDING`: next_scheduled_at ≤ now < next_scheduled_at + escalation_delay_minutes
+  - `ESCALATED`: now ≥ next_scheduled_at + escalation_delay_minutes
+- **EscalationEvent model** in `app/db/models.py` — tracks escalation start/resolve times
+- **Migration**: `alembic/versions/0003_escalation.py`
+- **Endpoints** (`app/api/routes/check_in.py`):
+  - `POST /check-in/acknowledge` — acknowledge check-in, reset timer, resolve active escalation
+  - `GET /check-in/status` — current escalation state
+  - `GET /check-in/events` — check-in event history
+  - `GET /check-in/escalation-history` — escalation event history
+  - `GET/PUT /check-in-config` — config CRUD
+- **Dashboard** (`app/services/dashboard.py`) — uses `compute_escalation_state()` for real escalation status with `escalation_deadline`
+- **Tests**: `backend/tests/test_check_in.py` (unit tests for state machine), `backend/tests/test_api.py` (integration tests)
+
+### Frontend
+- **Query keys**: `checkInStatus`, `checkInEvents`, `escalationHistory` in `query-keys.ts`
+- **Hooks**: `useAcknowledgeCheckInMutation`, `useCheckInEventsQuery`, `useEscalationHistoryQuery` in `hooks.ts`
+- **Dashboard** (`dashboard-page.tsx`): escalation card shows deadline countdown + "Ich bin okay" acknowledge button when pending/escalated
+- **NextCheckInCountdown**: danger tone (red + bold) when overdue
+- **EscalationStatusCard**: embeds acknowledge action + deadline countdown via `formatDeadlineCountdown` helper
+- **Check-in page** (`check-in-page.tsx`): shows event history + escalation history below config

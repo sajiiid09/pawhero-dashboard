@@ -9,10 +9,13 @@ import {
 } from "@tanstack/react-query";
 
 import {
+  acknowledgeCheckIn,
   deleteEmergencyContact,
   deletePet,
   getCheckInConfig,
+  getCheckInEvents,
   getDashboardSummary,
+  getEscalationHistory,
   getEmergencyChain,
   getEmergencyContact,
   getEmergencyProfile,
@@ -193,6 +196,37 @@ export function useUpdateCheckInConfigMutation() {
       queryClient.setQueryData(appQueryKeys.checkInConfig, config);
       await invalidateSharedQueries(queryClient, [appQueryKeys.dashboard]);
     },
+  });
+}
+
+export function useAcknowledgeCheckInMutation() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: acknowledgeCheckIn,
+    onSuccess: async () => {
+      await invalidateSharedQueries(queryClient, [
+        appQueryKeys.dashboard,
+        appQueryKeys.checkInConfig,
+        appQueryKeys.checkInStatus,
+        appQueryKeys.checkInEvents,
+        appQueryKeys.escalationHistory,
+      ]);
+    },
+  });
+}
+
+export function useCheckInEventsQuery() {
+  return useQuery({
+    queryKey: appQueryKeys.checkInEvents,
+    queryFn: getCheckInEvents,
+  });
+}
+
+export function useEscalationHistoryQuery() {
+  return useQuery({
+    queryKey: appQueryKeys.escalationHistory,
+    queryFn: getEscalationHistory,
   });
 }
 

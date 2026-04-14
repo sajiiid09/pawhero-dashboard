@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 
+import { cn } from "@/lib/utils";
 import { formatRelativeCheckIn } from "@/features/dashboard/view-model";
 
 type NextCheckInCountdownProps = {
@@ -22,5 +23,7 @@ export function NextCheckInCountdown({
     return () => window.clearInterval(timer);
   }, [targetIso]);
 
-  return <span>{label}</span>;
+  const isOverdue = label.includes("ueberfaellig");
+
+  return <span className={cn(isOverdue && "text-danger font-bold")}>{label}</span>;
 }
