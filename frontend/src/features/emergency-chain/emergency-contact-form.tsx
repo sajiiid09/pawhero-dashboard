@@ -3,18 +3,22 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Save } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { startTransition, useMemo } from "react";
+import { useMemo } from "react";
 import { useForm } from "react-hook-form";
 
 import { Button } from "@/components/ui/button";
 import { Field, inputClassName } from "@/components/ui/field";
 import { FormSection } from "@/components/ui/form-section";
-import { useMockAppStore } from "@/features/app/store";
+import { Skeleton } from "@/components/ui/skeleton";
+import {
+  useEmergencyChainQuery,
+  useEmergencyContactQuery,
+  useSaveEmergencyContactMutation,
+} from "@/features/app/hooks";
 import {
   emergencyContactFormSchema,
   type EmergencyContactFormValues,
 } from "@/features/app/schemas";
-import { selectEmergencyContactById } from "@/features/app/selectors";
 
 type EmergencyContactFormProps = {
   contactId?: string;
@@ -26,13 +30,14 @@ export function EmergencyContactForm({
   onComplete,
 }: EmergencyContactFormProps) {
   const router = useRouter();
-  const contactsCount = useMockAppStore((state) => state.emergencyContacts.length);
-  const existingContact = useMockAppStore((state) =>
-    contactId ? selectEmergencyContactById(state, contactId) : null,
-  );
-  const saveEmergencyContact = useMockAppStore(
-    (state) => state.saveEmergencyContact,
-  );
+  const { data: contacts = [] } = useEmergencyChainQuery();
+  const {
+    data: existingContact,
+    error,
+    isLoading,
+  } = useEmergencyContactQuery(contactId);
+  const saveEmergencyContactMutation = useSaveEmergencyContactMutation(contactId);
+  const contactsCount = contacts.length;
 
   const defaultValues = useMemo<EmergencyContactFormValues>(
     () => ({
@@ -53,18 +58,44 @@ export function EmergencyContactForm({
     values: defaultValues,
   });
 
-  function onSubmit(values: EmergencyContactFormValues) {
-    startTransition(() => {
-      saveEmergencyContact(values, contactId);
+  if (isLoading) {
+    return <Skeleton className="h-[420px] w-full rounded-[28px]" />;
+  }
+
+  if (contactId && !existingContact) {
+    return (
+      <div className="rounded-[24px] border border-border-soft bg-white p-7">
+        <p className="text-xl font-extrabold tracking-[-0.04em] text-foreground">
+          Kontakt nicht gefunden
+        </p>
+        <p className="mt-2 text-sm leading-7 text-text-muted">
+          {error instanceof Error
+            ? error.message
+            : "Der angeforderte Kontakt existiert nicht mehr."}
+        </p>
+      </div>
+    );
+  }
+
+  async function onSubmit(values: EmergencyContactFormValues) {
+    try {
+      await saveEmergencyContactMutation.mutateAsync(values);
       onComplete?.();
       if (!onComplete) {
         router.push("/emergency-chain");
       }
-    });
+    } catch {
+      // Mutation state already drives the inline error UI.
+    }
   }
 
   return (
     <form className="space-y-6" onSubmit={form.handleSubmit(onSubmit)}>
+      {saveEmergencyContactMutation.error ? (
+        <div className="rounded-[22px] border border-danger/20 bg-danger-soft px-5 py-4 text-sm font-semibold text-danger">
+          {saveEmergencyContactMutation.error.message}
+        </div>
+      ) : null}
       <FormSection title="Neuer Notfallkontakt">
         <div className="grid gap-4 md:grid-cols-2">
           <Field label="Name" error={form.formState.errors.name?.message}>
@@ -105,9 +136,15 @@ export function EmergencyContactForm({
       </FormSection>
 
       <div className="flex justify-end">
-        <Button type="submit" className="gap-2">
+        <Button
+          type="submit"
+          className="gap-2"
+          disabled={saveEmergencyContactMutation.isPending}
+        >
           <Save className="h-4 w-4" />
-          Kontakt speichern
+          {saveEmergencyContactMutation.isPending
+            ? "Speichert..."
+            : "Kontakt speichern"}
         </Button>
       </div>
     </form>

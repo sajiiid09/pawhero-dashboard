@@ -1,0 +1,29 @@
+[project]
+name = "pawhero-backend"
+version = "0.1.0"
+description = "FastAPI backend for the Pfoten-Held product slice."
+requires-python = ">=3.12"
+dependencies = [
+  "alembic>=1.16.5",
+  "fastapi[standard]>=0.116.1",
+  "psycopg[binary]>=3.2.10",
+  "pydantic-settings>=2.11.0",
+  "sqlalchemy>=2.0.43",
+]
+
+[dependency-groups]
+dev = [
+  "pytest>=8.4.2",
+  "ruff>=0.13.2",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "N"]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]

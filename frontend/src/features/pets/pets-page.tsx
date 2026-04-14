@@ -11,11 +11,12 @@ import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { EmptyState } from "@/components/ui/empty-state";
 import { MotionPage, MotionSection } from "@/components/ui/motion";
-import { useMockAppStore } from "@/features/app/store";
+import { Skeleton } from "@/components/ui/skeleton";
+import { useDeletePetMutation, usePetsQuery } from "@/features/app/hooks";
 
 export function PetsPage() {
-  const pets = useMockAppStore((state) => state.pets);
-  const deletePet = useMockAppStore((state) => state.deletePet);
+  const { data: pets = [], error, isLoading } = usePetsQuery();
+  const deletePetMutation = useDeletePetMutation();
   const [selectedPetId, setSelectedPetId] = useState<string | null>(null);
 
   return (
@@ -38,7 +39,30 @@ export function PetsPage() {
         </MotionSection>
 
         <MotionSection>
-          {pets.length === 0 ? (
+          {isLoading ? (
+            <div className="grid gap-4 xl:grid-cols-2">
+              {Array.from({ length: 2 }).map((_, index) => (
+                <div
+                  key={index}
+                  className="surface-card rounded-[var(--radius-card)] border border-border-soft p-6 sm:p-7"
+                >
+                  <div className="flex items-start gap-4">
+                    <Skeleton className="h-16 w-16 rounded-[22px]" />
+                    <div className="min-w-0 flex-1 space-y-3">
+                      <Skeleton className="h-8 w-44" />
+                      <Skeleton className="h-5 w-56" />
+                      <Skeleton className="h-10 w-full" />
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : error ? (
+            <EmptyState
+              title="Tiere konnten nicht geladen werden"
+              description={error instanceof Error ? error.message : "Bitte spaeter erneut versuchen."}
+            />
+          ) : pets.length === 0 ? (
             <EmptyState
               title="Noch keine Tiere angelegt"
               description="Lege dein erstes Tier an, damit Notfallprofil, Check-In-Konfiguration und Notfallkette verfuegbar werden."
@@ -99,6 +123,7 @@ export function PetsPage() {
                           size="sm"
                           className="gap-2 text-danger hover:bg-danger-soft hover:text-danger"
                           onClick={() => setSelectedPetId(pet.id)}
+                          disabled={deletePetMutation.isPending}
                         >
                           <Trash2 className="h-4 w-4" />
                           Loeschen
@@ -144,13 +169,18 @@ export function PetsPage() {
       <ConfirmDialog
         open={Boolean(selectedPetId)}
         title="Tier loeschen?"
-        description="Die Kartenansicht wird sofort aktualisiert. Diese Aktion ist in der Demo nur lokal persistent."
+        description="Das Tier wird sofort aus der Live-Uebersicht entfernt."
+        pending={deletePetMutation.isPending}
+        pendingLabel="Wird geloescht..."
         onClose={() => setSelectedPetId(null)}
         onConfirm={() => {
           if (selectedPetId) {
-            deletePet(selectedPetId);
+            deletePetMutation.mutate(selectedPetId, {
+              onSuccess: () => {
+                setSelectedPetId(null);
+              },
+            });
           }
-          setSelectedPetId(null);
         }}
       />
     </>

@@ -12,8 +12,7 @@ import {
   Siren,
 } from "lucide-react";
 
-import { selectPrimaryPet } from "@/features/app/selectors";
-import { useMockAppStore } from "@/features/app/store";
+import { usePetsQuery } from "@/features/app/hooks";
 import { cn } from "@/lib/utils";
 
 type NavigationItem = {
@@ -25,7 +24,8 @@ type NavigationItem = {
 
 export function AppSidebar() {
   const pathname = usePathname();
-  const primaryPet = useMockAppStore(selectPrimaryPet);
+  const { data: pets = [] } = usePetsQuery();
+  const primaryPet = pets[0] ?? null;
 
   const navigationItems: NavigationItem[] = [
     {

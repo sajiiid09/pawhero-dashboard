@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { Manrope } from "next/font/google";
 
-import { MockAppStoreProvider } from "@/features/app/store";
+import { AppProviders } from "@/components/providers";
 import "./globals.css";
 
 const manrope = Manrope({
@@ -22,7 +22,7 @@ export default function RootLayout({
   return (
     <html lang="de" className={`${manrope.variable} h-full antialiased`}>
       <body className="min-h-full font-sans text-foreground">
-        <MockAppStoreProvider>{children}</MockAppStoreProvider>
+        <AppProviders>{children}</AppProviders>
       </body>
     </html>
   );

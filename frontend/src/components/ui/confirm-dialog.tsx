@@ -10,6 +10,8 @@ type ConfirmDialogProps = {
   title: string;
   description: string;
   confirmLabel?: string;
+  pendingLabel?: string;
+  pending?: boolean;
   onConfirm: () => void;
   onClose: () => void;
 };
@@ -19,6 +21,8 @@ export function ConfirmDialog({
   title,
   description,
   confirmLabel = "Loeschen",
+  pendingLabel = "Wird verarbeitet...",
+  pending = false,
   onConfirm,
   onClose,
 }: ConfirmDialogProps) {
@@ -50,11 +54,11 @@ export function ConfirmDialog({
               </div>
             </div>
             <div className="mt-6 flex justify-end gap-3">
-              <Button variant="ghost" onClick={onClose}>
+              <Button variant="ghost" onClick={onClose} disabled={pending}>
                 Abbrechen
               </Button>
-              <Button variant="danger" onClick={onConfirm}>
-                {confirmLabel}
+              <Button variant="danger" onClick={onConfirm} disabled={pending}>
+                {pending ? pendingLabel : confirmLabel}
               </Button>
             </div>
           </motion.div>

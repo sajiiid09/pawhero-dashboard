@@ -3,7 +3,7 @@
 import { AnimatePresence, motion } from "framer-motion";
 import { ArrowDown, ArrowUp, KeyRound, Pencil, Plus, Trash2 } from "lucide-react";
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useState } from "react";
 
 import { PageHeader } from "@/components/page-header";
 import { Badge } from "@/components/ui/badge";
@@ -11,18 +11,17 @@ import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { EmptyState } from "@/components/ui/empty-state";
 import { MotionPage, MotionSection } from "@/components/ui/motion";
-import { selectOrderedEmergencyContacts } from "@/features/app/selectors";
-import { useMockAppStore } from "@/features/app/store";
+import { Skeleton } from "@/components/ui/skeleton";
+import {
+  useDeleteEmergencyContactMutation,
+  useEmergencyChainQuery,
+  useMoveEmergencyContactMutation,
+} from "@/features/app/hooks";
 
 export function EmergencyChainPage() {
-  const state = useMockAppStore((value) => value);
-  const contacts = useMemo(() => selectOrderedEmergencyContacts(state), [state]);
-  const deleteEmergencyContact = useMockAppStore(
-    (state) => state.deleteEmergencyContact,
-  );
-  const moveEmergencyContact = useMockAppStore(
-    (state) => state.moveEmergencyContact,
-  );
+  const { data: contacts = [], error, isLoading } = useEmergencyChainQuery();
+  const deleteEmergencyContactMutation = useDeleteEmergencyContactMutation();
+  const moveEmergencyContactMutation = useMoveEmergencyContactMutation();
   const [selectedContactId, setSelectedContactId] = useState<string | null>(null);
 
   return (
@@ -45,7 +44,25 @@ export function EmergencyChainPage() {
         </MotionSection>
 
         <MotionSection>
-          {contacts.length === 0 ? (
+          {isLoading ? (
+            <div className="space-y-4">
+              {Array.from({ length: 2 }).map((_, index) => (
+                <div
+                  key={index}
+                  className="surface-card rounded-[var(--radius-card)] border border-border-soft p-6 sm:p-7"
+                >
+                  <Skeleton className="h-6 w-28" />
+                  <Skeleton className="mt-4 h-10 w-56" />
+                  <Skeleton className="mt-4 h-24 w-full" />
+                </div>
+              ))}
+            </div>
+          ) : error ? (
+            <EmptyState
+              title="Notfallkette konnte nicht geladen werden"
+              description={error instanceof Error ? error.message : "Bitte spaeter erneut versuchen."}
+            />
+          ) : contacts.length === 0 ? (
             <EmptyState
               title="Noch keine Notfallkontakte"
               description="Fuege mindestens zwei Kontakte hinzu und informiere sie vorab ueber ihre Rolle in Pfoten-Held."
@@ -110,16 +127,29 @@ export function EmergencyChainPage() {
                         <Button
                           variant="ghost"
                           size="sm"
-                          onClick={() => moveEmergencyContact(contact.id, "up")}
-                          disabled={index === 0}
+                          onClick={() =>
+                            moveEmergencyContactMutation.mutate({
+                              contactId: contact.id,
+                              direction: "up",
+                            })
+                          }
+                          disabled={index === 0 || moveEmergencyContactMutation.isPending}
                         >
                           <ArrowUp className="h-4 w-4" />
                         </Button>
                         <Button
                           variant="ghost"
                           size="sm"
-                          onClick={() => moveEmergencyContact(contact.id, "down")}
-                          disabled={index === contacts.length - 1}
+                          onClick={() =>
+                            moveEmergencyContactMutation.mutate({
+                              contactId: contact.id,
+                              direction: "down",
+                            })
+                          }
+                          disabled={
+                            index === contacts.length - 1 ||
+                            moveEmergencyContactMutation.isPending
+                          }
                         >
                           <ArrowDown className="h-4 w-4" />
                         </Button>
@@ -134,6 +164,7 @@ export function EmergencyChainPage() {
                           size="sm"
                           className="gap-2 text-danger hover:bg-danger-soft hover:text-danger"
                           onClick={() => setSelectedContactId(contact.id)}
+                          disabled={deleteEmergencyContactMutation.isPending}
                         >
                           <Trash2 className="h-4 w-4" />
                           Loeschen
@@ -152,12 +183,17 @@ export function EmergencyChainPage() {
         open={Boolean(selectedContactId)}
         title="Kontakt aus der Notfallkette entfernen?"
         description="Die Prioritaeten werden anschliessend automatisch neu geordnet."
+        pending={deleteEmergencyContactMutation.isPending}
+        pendingLabel="Wird entfernt..."
         onClose={() => setSelectedContactId(null)}
         onConfirm={() => {
           if (selectedContactId) {
-            deleteEmergencyContact(selectedContactId);
+            deleteEmergencyContactMutation.mutate(selectedContactId, {
+              onSuccess: () => {
+                setSelectedContactId(null);
+              },
+            });
           }
-          setSelectedContactId(null);
         }}
       />
     </>
