@@ -8,7 +8,12 @@ import type {
   Pet,
   PetInput,
 } from "@/features/app/types";
-import type { DashboardSummary } from "@/features/dashboard/types";
+import type {
+  CheckInStatusResponse,
+  CheckInEventItem,
+  DashboardSummary,
+  EscalationEventItem,
+} from "@/features/dashboard/types";
 
 export function getDashboardSummary() {
   return apiRequest<DashboardSummary>("/dashboard/summary");
@@ -106,4 +111,18 @@ export function getEmergencyAccessToken(petId: string) {
   return apiRequest<{ access_token: string }>(
     `/pets/${petId}/emergency-access-token`,
   );
+}
+
+export function acknowledgeCheckIn() {
+  return apiRequest<CheckInStatusResponse>("/check-in/acknowledge", {
+    method: "POST",
+  });
+}
+
+export function getCheckInEvents() {
+  return apiRequest<CheckInEventItem[]>("/check-in/events");
+}
+
+export function getEscalationHistory() {
+  return apiRequest<EscalationEventItem[]>("/check-in/escalation-history");
 }

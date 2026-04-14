@@ -51,6 +51,10 @@ class Owner(Base):
         back_populates="owner",
         cascade="all, delete-orphan",
     )
+    escalation_events: Mapped[list[EscalationEvent]] = relationship(
+        back_populates="owner",
+        cascade="all, delete-orphan",
+    )
 
 
 class Pet(TimestampMixin, Base):
@@ -154,3 +158,16 @@ class CheckInEvent(TimestampMixin, Base):
     method: Mapped[str] = mapped_column(String(32), nullable=False)
 
     owner: Mapped[Owner] = relationship(back_populates="check_in_events")
+
+
+class EscalationEvent(TimestampMixin, Base):
+    __tablename__ = "escalation_events"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    owner_id: Mapped[str] = mapped_column(
+        ForeignKey("owners.id", ondelete="CASCADE"), nullable=False
+    )
+    started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    owner: Mapped[Owner] = relationship(back_populates="escalation_events")

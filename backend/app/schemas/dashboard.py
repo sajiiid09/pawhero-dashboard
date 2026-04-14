@@ -14,6 +14,7 @@ class EscalationStatusDTO(AppSchema):
     mode: str
     title: str
     description: str
+    escalation_deadline: str | None = Field(alias="escalationDeadline", default=None)
 
 
 class MonitoredPetDTO(AppSchema):
