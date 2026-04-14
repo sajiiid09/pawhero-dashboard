@@ -11,6 +11,7 @@ import {
   useCheckInConfigQuery,
   useCheckInEventsQuery,
   useEscalationHistoryQuery,
+  useNotificationLogsQuery,
   useUpdateCheckInConfigMutation,
 } from "@/features/app/hooks";
 import type { CheckInConfigInput } from "@/features/app/types";
@@ -18,6 +19,7 @@ import { CheckInHistorySection } from "@/features/dashboard/components/check-in-
 import type { CheckInHistoryItem } from "@/features/dashboard/types";
 import { formatCheckInTime, getCheckInMethodLabel } from "@/features/dashboard/view-model";
 import { EscalationHistoryCard } from "@/features/check-in/components/escalation-history-card";
+import { NotificationHistoryCard } from "@/features/check-in/components/notification-history-card";
 
 const intervalOptions = [6, 8, 12, 24] as const;
 const escalationOptions = [15, 30, 60, 120] as const;
@@ -212,6 +214,10 @@ export function CheckInPage() {
           <EscalationHistorySection />
         </div>
       </MotionSection>
+
+      <MotionSection>
+        <NotificationLogSection />
+      </MotionSection>
     </MotionPage>
   );
 }
@@ -236,4 +242,14 @@ function EscalationHistorySection() {
   }
 
   return <EscalationHistoryCard events={events ?? []} />;
+}
+
+function NotificationLogSection() {
+  const { data: logs, isLoading } = useNotificationLogsQuery();
+
+  if (isLoading) {
+    return <Skeleton className="h-[320px] rounded-[var(--radius-card)]" />;
+  }
+
+  return <NotificationHistoryCard logs={logs ?? []} />;
 }

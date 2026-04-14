@@ -48,3 +48,12 @@ export type EscalationEventItem = {
   startedAt: string;
   resolvedAt?: string | null;
 };
+
+export type NotificationLogItem = {
+  id: string;
+  recipientEmail: string;
+  notificationType: string;
+  status: string;
+  errorMessage: string | null;
+  createdAt: string;
+};

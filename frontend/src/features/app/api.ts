@@ -13,6 +13,7 @@ import type {
   CheckInEventItem,
   DashboardSummary,
   EscalationEventItem,
+  NotificationLogItem,
 } from "@/features/dashboard/types";
 
 export function getDashboardSummary() {
@@ -125,4 +126,8 @@ export function getCheckInEvents() {
 
 export function getEscalationHistory() {
   return apiRequest<EscalationEventItem[]>("/check-in/escalation-history");
+}
+
+export function getNotificationLogs() {
+  return apiRequest<NotificationLogItem[]>("/notifications");
 }

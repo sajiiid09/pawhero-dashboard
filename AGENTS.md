@@ -122,4 +122,25 @@ Backend tests (`conftest.py`) create a **temporary PostgreSQL database** per ses
 - **Dashboard** (`dashboard-page.tsx`): escalation card shows deadline countdown + "Ich bin okay" acknowledge button when pending/escalated
 - **NextCheckInCountdown**: danger tone (red + bold) when overdue
 - **EscalationStatusCard**: embeds acknowledge action + deadline countdown via `formatDeadlineCountdown` helper
-- **Check-in page** (`check-in-page.tsx`): shows event history + escalation history below config
+- **Check-in page** (`check-in-page.tsx`): shows event history + escalation history + notification history below config
+
+## Notification Engine (Phase 6)
+
+### Backend
+- **Scheduler**: APScheduler `BackgroundScheduler` in `app/services/scheduler.py`, runs every 60s, starts/stops with FastAPI lifespan
+- **Dispatcher** (`app/services/notification_dispatcher.py`):
+  - PENDING state → sends reminder email to owner (once per cycle, dedup via NotificationLog)
+  - ESCALATED state → notifies emergency contacts sequentially in priority order (5-min gap between contacts)
+- **Email service** (`app/services/email.py`): SMTP via Python stdlib (`smtplib`), plain text emails, German templates
+- **NotificationLog model** in `app/db/models.py` — id, owner_id, escalation_event_id, recipient_email, notification_type (reminder/escalation_alert), status (sent/failed), error_message
+- **Migration**: `alembic/versions/0004_notification_logs.py`
+- **Repository**: `app/repositories/notification.py` — dedup queries, log creation, list history
+- **Endpoint**: `GET /notifications` — notification logs for authenticated owner (newest first, limit 50)
+- **Config**: SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASSWORD, SMTP_FROM, APP_URL env vars
+
+### Frontend
+- **Type**: `NotificationLogItem` in `dashboard/types.ts`
+- **Query key**: `notifications` in `query-keys.ts`
+- **Hook**: `useNotificationLogsQuery` in `hooks.ts`
+- **Component**: `NotificationHistoryCard` in `check-in/components/notification-history-card.tsx`
+- **Check-in page**: notification history section below escalation history

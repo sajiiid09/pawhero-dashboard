@@ -19,6 +19,7 @@ import {
   getEmergencyChain,
   getEmergencyContact,
   getEmergencyProfile,
+  getNotificationLogs,
   getPublicEmergencyProfile,
   getPet,
   getPets,
@@ -227,6 +228,13 @@ export function useEscalationHistoryQuery() {
   return useQuery({
     queryKey: appQueryKeys.escalationHistory,
     queryFn: getEscalationHistory,
+  });
+}
+
+export function useNotificationLogsQuery() {
+  return useQuery({
+    queryKey: appQueryKeys.notifications,
+    queryFn: getNotificationLogs,
   });
 }
 

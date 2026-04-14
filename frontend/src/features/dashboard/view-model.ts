@@ -119,6 +119,18 @@ export function formatDeadlineCountdown(
   return `Seit ${absMinutes} Min eskaliert`;
 }
 
+export function getNotificationTypeLabel(type: string) {
+  if (type === "reminder") return "Erinnerung";
+  if (type === "escalation_alert") return "Eskalationsalarm";
+  return type;
+}
+
+export function getNotificationStatusLabel(status: string) {
+  if (status === "sent") return "Gesendet";
+  if (status === "failed") return "Fehlgeschlagen";
+  return status;
+}
+
 function startOfDay(value: Date) {
   return new Date(value.getFullYear(), value.getMonth(), value.getDate());
 }

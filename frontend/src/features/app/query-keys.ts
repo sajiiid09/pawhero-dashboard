@@ -8,6 +8,7 @@ export const appQueryKeys = {
   checkInStatus: ["check-in-status"] as const,
   checkInEvents: ["check-in-events"] as const,
   escalationHistory: ["escalation-history"] as const,
+  notifications: ["notifications"] as const,
   emergencyProfile: (petId: string) => ["emergency-profile", petId] as const,
   emergencyProfileRoot: ["emergency-profile"] as const,
 };

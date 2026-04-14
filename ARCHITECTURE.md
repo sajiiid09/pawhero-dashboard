@@ -43,3 +43,12 @@ Full-stack pet emergency management dashboard. FastAPI backend with JWT auth, Ne
 - **Frontend polling**: Dashboard re-fetches every 60s via TanStack Query staleTime. "Ich bin okay" button triggers acknowledge mutation, invalidates dashboard + config + events + escalation queries
 - **Deadline countdown**: `formatDeadlineCountdown()` in `view-model.ts` shows "Eskalation in X Min" (pending) or "Seit X Min eskaliert" (escalated), guarded by `useHydrated()` to avoid hydration mismatch
 - **Danger tone**: `NextCheckInCountdown` applies `text-danger font-bold` when overdue
+
+## Notifications
+- **APScheduler** in-process background scheduler runs every 60s, starts/stops with FastAPI lifespan
+- **Dispatcher**: checks all owners with CheckInConfig, sends reminder email on PENDING, sequential escalation alerts on ESCALATED
+- **Sequential fallback**: emergency contacts notified one-by-one in priority order, 5-min gap between each
+- **Email**: SMTP via Python stdlib (`smtplib`), plain text German templates, TLS on port 587
+- **Dedup**: NotificationLog queried before sending — no duplicate reminders per cycle, no duplicate alerts per escalation per contact
+- **NotificationLog model**: delivery audit trail — recipient, type (reminder/escalation_alert), status (sent/failed), error message
+- **Frontend**: notification history card on check-in page shows all sent/failed notifications

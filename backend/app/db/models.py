@@ -55,6 +55,10 @@ class Owner(Base):
         back_populates="owner",
         cascade="all, delete-orphan",
     )
+    notification_logs: Mapped[list[NotificationLog]] = relationship(
+        back_populates="owner",
+        cascade="all, delete-orphan",
+    )
 
 
 class Pet(TimestampMixin, Base):
@@ -171,3 +175,21 @@ class EscalationEvent(TimestampMixin, Base):
     resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     owner: Mapped[Owner] = relationship(back_populates="escalation_events")
+
+
+class NotificationLog(TimestampMixin, Base):
+    __tablename__ = "notification_logs"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    owner_id: Mapped[str] = mapped_column(
+        ForeignKey("owners.id", ondelete="CASCADE"), nullable=False
+    )
+    escalation_event_id: Mapped[str | None] = mapped_column(
+        ForeignKey("escalation_events.id", ondelete="SET NULL"), nullable=True
+    )
+    recipient_email: Mapped[str] = mapped_column(String(255), nullable=False)
+    notification_type: Mapped[str] = mapped_column(String(32), nullable=False)
+    status: Mapped[str] = mapped_column(String(16), nullable=False)
+    error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    owner: Mapped[Owner] = relationship(back_populates="notification_logs")
