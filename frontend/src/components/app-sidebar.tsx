@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import {
   Clock3,
   LayoutDashboard,
@@ -12,6 +12,7 @@ import {
   Siren,
 } from "lucide-react";
 
+import { useAuth } from "@/features/auth/auth-context";
 import { usePetsQuery } from "@/features/app/hooks";
 import { cn } from "@/lib/utils";
 
@@ -24,6 +25,8 @@ type NavigationItem = {
 
 export function AppSidebar() {
   const pathname = usePathname();
+  const router = useRouter();
+  const { logout, user } = useAuth();
   const { data: pets = [] } = usePetsQuery();
   const primaryPet = pets[0] ?? null;
 
@@ -60,6 +63,11 @@ export function AppSidebar() {
     },
   ];
 
+  const handleLogout = () => {
+    logout();
+    router.push("/login");
+  };
+
   return (
     <aside className="w-full shrink-0 rounded-[var(--radius-panel)] bg-surface-sidebar text-white shadow-[var(--shadow-sidebar)] md:w-[278px]">
       <div className="flex h-full flex-col">
@@ -71,6 +79,9 @@ export function AppSidebar() {
           </div>
           <div>
             <p className="text-[1.85rem] font-extrabold tracking-[-0.06em]">Pfoten-Held</p>
+            {user && (
+              <p className="text-xs text-white/50">{user.displayName}</p>
+            )}
           </div>
         </div>
 
@@ -111,6 +122,7 @@ export function AppSidebar() {
         <div className="border-t border-white/8 px-5 py-5 md:px-6 md:py-6">
           <button
             type="button"
+            onClick={handleLogout}
             className="flex w-full items-center gap-3 rounded-[22px] px-4 py-3 text-left text-base font-semibold text-white/65 hover:bg-white/5 hover:text-white focus-visible:bg-white/6 focus-visible:text-white focus-visible:outline-none md:px-5"
           >
             <LogOut className="h-[1.15rem] w-[1.15rem]" />

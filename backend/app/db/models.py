@@ -36,6 +36,7 @@ class Owner(Base):
     id: Mapped[str] = mapped_column(String(64), primary_key=True)
     email: Mapped[str] = mapped_column(String(255), nullable=False, unique=True)
     display_name: Mapped[str] = mapped_column(String(255), nullable=False)
+    password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
 
     pets: Mapped[list[Pet]] = relationship(back_populates="owner", cascade="all, delete-orphan")
     emergency_contacts: Mapped[list[EmergencyContact]] = relationship(
@@ -56,7 +57,9 @@ class Pet(TimestampMixin, Base):
     __tablename__ = "pets"
 
     id: Mapped[str] = mapped_column(String(64), primary_key=True)
-    owner_id: Mapped[str] = mapped_column(ForeignKey("owners.id", ondelete="CASCADE"), nullable=False)
+    owner_id: Mapped[str] = mapped_column(
+        ForeignKey("owners.id", ondelete="CASCADE"), nullable=False
+    )
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     breed: Mapped[str] = mapped_column(String(255), nullable=False)
     age_years: Mapped[int] = mapped_column(Integer, nullable=False)
@@ -74,6 +77,9 @@ class Pet(TimestampMixin, Base):
     feeding_notes: Mapped[str] = mapped_column(Text, nullable=False)
     special_needs: Mapped[str] = mapped_column(Text, nullable=False)
     spare_key_location: Mapped[str] = mapped_column(Text, nullable=False)
+    emergency_access_token: Mapped[str | None] = mapped_column(
+        String(64), nullable=True, unique=True
+    )
 
     owner: Mapped[Owner] = relationship(back_populates="pets")
 
@@ -82,7 +88,9 @@ class EmergencyContact(TimestampMixin, Base):
     __tablename__ = "emergency_contacts"
 
     id: Mapped[str] = mapped_column(String(64), primary_key=True)
-    owner_id: Mapped[str] = mapped_column(ForeignKey("owners.id", ondelete="CASCADE"), nullable=False)
+    owner_id: Mapped[str] = mapped_column(
+        ForeignKey("owners.id", ondelete="CASCADE"), nullable=False
+    )
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     relationship_label: Mapped[str] = mapped_column(String(255), nullable=False)
     phone: Mapped[str] = mapped_column(String(255), nullable=False)
@@ -106,7 +114,9 @@ class EmergencyChainEntry(Base):
     )
 
     id: Mapped[str] = mapped_column(String(64), primary_key=True)
-    owner_id: Mapped[str] = mapped_column(ForeignKey("owners.id", ondelete="CASCADE"), nullable=False)
+    owner_id: Mapped[str] = mapped_column(
+        ForeignKey("owners.id", ondelete="CASCADE"), nullable=False
+    )
     contact_id: Mapped[str] = mapped_column(
         ForeignKey("emergency_contacts.id", ondelete="CASCADE"),
         nullable=False,
@@ -136,7 +146,9 @@ class CheckInEvent(TimestampMixin, Base):
     __tablename__ = "check_in_events"
 
     id: Mapped[str] = mapped_column(String(64), primary_key=True)
-    owner_id: Mapped[str] = mapped_column(ForeignKey("owners.id", ondelete="CASCADE"), nullable=False)
+    owner_id: Mapped[str] = mapped_column(
+        ForeignKey("owners.id", ondelete="CASCADE"), nullable=False
+    )
     status: Mapped[str] = mapped_column(String(32), nullable=False)
     acknowledged_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     method: Mapped[str] = mapped_column(String(32), nullable=False)

@@ -7,16 +7,24 @@ import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { useEmergencyProfileQuery } from "@/features/app/hooks";
+import {
+  useEmergencyProfileQuery,
+  usePublicEmergencyProfileQuery,
+} from "@/features/app/hooks";
 
 type EmergencyProfilePageProps = {
-  petId: string;
+  petId?: string;
+  token?: string;
 };
 
 export function EmergencyProfilePage({
   petId,
+  token,
 }: EmergencyProfilePageProps) {
-  const { data: profile, error, isLoading } = useEmergencyProfileQuery(petId);
+  const authQuery = useEmergencyProfileQuery(petId ?? "");
+  const publicQuery = usePublicEmergencyProfileQuery(token ?? "");
+
+  const { data: profile, error, isLoading } = token ? publicQuery : authQuery;
 
   if (isLoading) {
     return (
@@ -62,9 +70,11 @@ export function EmergencyProfilePage({
                 ID: {profile.profileId}
               </p>
             </div>
-            <Link href="/pets">
-              <Button variant="ghost">Zur Verwaltung</Button>
-            </Link>
+            {petId && (
+              <Link href="/pets">
+                <Button variant="ghost">Zur Verwaltung</Button>
+              </Link>
+            )}
           </div>
         </motion.header>
 

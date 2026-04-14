@@ -1,13 +1,19 @@
 from uuid import uuid4
 
 from fastapi import APIRouter, HTTPException, status
+from pydantic import BaseModel
 
 from app.api.dependencies import DbSession, OwnerId
 from app.repositories.pets import delete_pet, get_pet, list_pets, save_pet
 from app.schemas.pets import PetDTO, PetUpsertRequest
+from app.services.auth import generate_id
 from app.services.pets import serialize_pet
 
 router = APIRouter(prefix="/pets", tags=["pets"])
+
+
+class EmergencyAccessTokenResponse(BaseModel):
+    access_token: str
 
 
 @router.get("", response_model=list[PetDTO])
@@ -31,7 +37,9 @@ def get_pet_by_id(pet_id: str, session: DbSession, owner_id: OwnerId) -> PetDTO:
 
 
 @router.put("/{pet_id}", response_model=PetDTO)
-def update_pet(pet_id: str, payload: PetUpsertRequest, session: DbSession, owner_id: OwnerId) -> PetDTO:
+def update_pet(
+    pet_id: str, payload: PetUpsertRequest, session: DbSession, owner_id: OwnerId
+) -> PetDTO:
     existing_pet = get_pet(session, owner_id, pet_id)
     if existing_pet is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Pet not found.")
@@ -47,3 +55,37 @@ def remove_pet(pet_id: str, session: DbSession, owner_id: OwnerId) -> None:
     if not was_deleted:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Pet not found.")
     session.commit()
+
+
+@router.get(
+    "/{pet_id}/emergency-access-token",
+    response_model=EmergencyAccessTokenResponse,
+)
+def get_emergency_access_token(
+    pet_id: str, session: DbSession, owner_id: OwnerId
+) -> EmergencyAccessTokenResponse:
+    pet = get_pet(session, owner_id, pet_id)
+    if pet is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Pet not found.")
+
+    if not pet.emergency_access_token:
+        pet.emergency_access_token = generate_id()
+        session.flush()
+
+    return EmergencyAccessTokenResponse(access_token=pet.emergency_access_token)
+
+
+@router.post(
+    "/{pet_id}/emergency-access-token/regenerate",
+    response_model=EmergencyAccessTokenResponse,
+)
+def regenerate_emergency_access_token(
+    pet_id: str, session: DbSession, owner_id: OwnerId
+) -> EmergencyAccessTokenResponse:
+    pet = get_pet(session, owner_id, pet_id)
+    if pet is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Pet not found.")
+
+    pet.emergency_access_token = generate_id()
+    session.flush()
+    return EmergencyAccessTokenResponse(access_token=pet.emergency_access_token)

@@ -43,13 +43,15 @@ export function CheckInPage() {
     );
   }
 
+  const currentConfig = config;
+
   function applyConfigPatch(patch: Partial<CheckInConfigInput>) {
     updateCheckInConfigMutation.mutate({
-      intervalHours: patch.intervalHours ?? config.intervalHours,
+      intervalHours: patch.intervalHours ?? currentConfig.intervalHours,
       escalationDelayMinutes:
-        patch.escalationDelayMinutes ?? config.escalationDelayMinutes,
-      primaryMethod: patch.primaryMethod ?? config.primaryMethod,
-      backupMethod: patch.backupMethod ?? config.backupMethod,
+        patch.escalationDelayMinutes ?? currentConfig.escalationDelayMinutes,
+      primaryMethod: patch.primaryMethod ?? currentConfig.primaryMethod,
+      backupMethod: patch.backupMethod ?? currentConfig.backupMethod,
     });
   }
 
