@@ -131,3 +131,13 @@ export function getEscalationHistory() {
 export function getNotificationLogs() {
   return apiRequest<NotificationLogItem[]>("/notifications");
 }
+
+export function acknowledgePublicEmergency(token: string, email: string, name?: string) {
+  return apiRequest<{ success: boolean }>(
+    `/public/emergency-profile/${token}/acknowledge`,
+    {
+      method: "POST",
+      body: JSON.stringify({ email, name: name || undefined }),
+    },
+  );
+}

@@ -175,6 +175,10 @@ class EscalationEvent(TimestampMixin, Base):
     resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     owner: Mapped[Owner] = relationship(back_populates="escalation_events")
+    acknowledgments: Mapped[list[ResponderAcknowledgment]] = relationship(
+        back_populates="escalation_event",
+        cascade="all, delete-orphan",
+    )
 
 
 class NotificationLog(TimestampMixin, Base):
@@ -193,3 +197,20 @@ class NotificationLog(TimestampMixin, Base):
     error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     owner: Mapped[Owner] = relationship(back_populates="notification_logs")
+
+
+class ResponderAcknowledgment(TimestampMixin, Base):
+    __tablename__ = "responder_acknowledgments"
+    __table_args__ = (
+        UniqueConstraint("escalation_event_id", "responder_email", name="uq_responder_ack"),
+    )
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    escalation_event_id: Mapped[str] = mapped_column(
+        ForeignKey("escalation_events.id", ondelete="CASCADE"), nullable=False
+    )
+    pet_id: Mapped[str] = mapped_column(ForeignKey("pets.id", ondelete="CASCADE"), nullable=False)
+    responder_email: Mapped[str] = mapped_column(String(255), nullable=False)
+    responder_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+
+    escalation_event: Mapped[EscalationEvent] = relationship(back_populates="acknowledgments")

@@ -52,3 +52,11 @@ Full-stack pet emergency management dashboard. FastAPI backend with JWT auth, Ne
 - **Dedup**: NotificationLog queried before sending — no duplicate reminders per cycle, no duplicate alerts per escalation per contact
 - **NotificationLog model**: delivery audit trail — recipient, type (reminder/escalation_alert), status (sent/failed), error message
 - **Frontend**: notification history card on check-in page shows all sent/failed notifications
+
+## Emergency Contact Experience
+- **Public profile** (`/s/[token]`): tokenized access, no auth required. Shows pet image, basic info, address, spare key location, feeding notes, contact capabilities, medical record
+- **Escalation banner**: when escalation active, shows urgency context (minutes since escalation, acknowledgment count)
+- **Responder acknowledgment**: `POST /public/emergency-profile/{token}/acknowledge` — responders confirm they're handling the situation via email-based form. Idempotent (dedup by email). Triggers email notification to owner
+- **ResponderAcknowledgment model**: tracks who responded, when, linked to escalation event and pet
+- **Contact capabilities**: `hasApartmentKey`, `canTakeDog`, `notes` shown as badges/inline text on public profile
+- **Mobile-first**: responsive font sizes, larger touch targets, single-column on small screens

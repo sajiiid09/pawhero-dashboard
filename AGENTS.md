@@ -144,3 +144,19 @@ Backend tests (`conftest.py`) create a **temporary PostgreSQL database** per ses
 - **Hook**: `useNotificationLogsQuery` in `hooks.ts`
 - **Component**: `NotificationHistoryCard` in `check-in/components/notification-history-card.tsx`
 - **Check-in page**: notification history section below escalation history
+
+## Emergency Contact Experience (Phase 7)
+
+### Backend
+- **ResponderAcknowledgment model** in `app/db/models.py` — id, escalation_event_id, pet_id, responder_email, responder_name, created_at; unique constraint on (escalation_event_id, responder_email)
+- **Migration**: `alembic/versions/0005_responder_acknowledgments.py`
+- **Repository**: `app/repositories/responder.py` — create_acknowledgment, has_acknowledged, count_acknowledgments
+- **Endpoint**: `POST /public/emergency-profile/{token}/acknowledge` — accepts {email, name?}, idempotent (dedup by email), sends email to owner on success
+- **EmergencyProfileDTO extended**: added `escalationContext` (startedAt, acknowledgmentCount), `feedingNotes`, `spareKeyLocation`
+- **Escalation context**: `build_emergency_profile_for_pet()` now includes escalation state + acknowledgment count when escalated
+
+### Frontend
+- **Emergency profile page** rewritten with: pet image, breed/age/weight, address, spare key location, feeding notes, contact capabilities (has key, can take dog, contact notes)
+- **Escalation banner**: shown on public profile when escalation is active, shows minutes since escalation + acknowledgment count
+- **"Ich kümmere mich" action**: form for responders to acknowledge (email + optional name), calls POST endpoint, shows confirmation
+- **Mobile responsive**: responsive font sizes, larger touch targets, responsive header layout

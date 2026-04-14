@@ -54,6 +54,11 @@ export type CheckInConfig = {
   nextScheduledAt: string;
 };
 
+export type EscalationContext = {
+  startedAt: string;
+  acknowledgmentCount: number;
+};
+
 export type EmergencyProfileView = {
   pet: Pet;
   profileId: string;
@@ -61,6 +66,9 @@ export type EmergencyProfileView = {
   contacts: EmergencyChainContact[];
   medicalRecord: string[];
   helpText: string;
+  escalationContext: EscalationContext | null;
+  feedingNotes: string;
+  spareKeyLocation: string;
 };
 
 export type PetInput = Omit<Pet, "id">;

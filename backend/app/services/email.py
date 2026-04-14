@@ -69,3 +69,20 @@ def build_escalation_email(
         "Pfoten-Held Notfall-System"
     )
     return subject, body
+
+
+def build_responder_ack_email(
+    owner_name: str,
+    responder_name: str,
+    pet_name: str,
+    app_url: str,
+) -> tuple[str, str]:
+    subject = f"Pfoten-Held: {responder_name} hat die Notfallbetreuung uebernommen"
+    body = (
+        f"Hallo {owner_name},\n\n"
+        f"{responder_name} hat die Notfallbetreuung fuer {pet_name} uebernommen "
+        "und wird sich um das Tier kuemmern.\n\n"
+        f"Dashboard: {app_url}/dashboard\n\n"
+        "Pfoten-Held Notfall-System"
+    )
+    return subject, body
