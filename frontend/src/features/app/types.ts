@@ -1,4 +1,4 @@
-import type { CheckInHistoryItem, DashboardSummary } from "@/features/dashboard/types";
+import type { CheckInHistoryItem } from "@/features/dashboard/types";
 
 export type PetMedicalProfile = {
   preExistingConditions: string;
@@ -40,9 +40,7 @@ export type EmergencyContact = {
   notes: string;
 };
 
-export type EmergencyChainEntry = {
-  id: string;
-  contactId: string;
+export type EmergencyChainContact = EmergencyContact & {
   priority: number;
 };
 
@@ -56,27 +54,17 @@ export type CheckInConfig = {
   nextScheduledAt: string;
 };
 
-export type EscalationStatus = DashboardSummary["escalationStatus"];
-
 export type EmergencyProfileView = {
   pet: Pet;
   profileId: string;
   importantNotes: string[];
-  contacts: Array<EmergencyContact & { priority: number }>;
+  contacts: EmergencyChainContact[];
   medicalRecord: string[];
   helpText: string;
 };
 
-export type MockAppStateData = {
-  pets: Pet[];
-  emergencyContacts: EmergencyContact[];
-  emergencyChain: EmergencyChainEntry[];
-  checkInConfig: CheckInConfig;
-  checkInHistory: CheckInHistoryItem[];
-  escalationStatus: EscalationStatus;
-};
-
 export type PetInput = Omit<Pet, "id">;
-export type EmergencyContactInput = Omit<EmergencyContact, "id"> & {
-  priority: number;
-};
+export type EmergencyContactInput = Omit<EmergencyChainContact, "id">;
+export type MoveDirection = "up" | "down";
+export type CheckInConfigInput = Omit<CheckInConfig, "nextScheduledAt">;
+export type RecentCheckInHistory = CheckInHistoryItem[];

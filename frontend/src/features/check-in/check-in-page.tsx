@@ -6,15 +6,52 @@ import { PageHeader } from "@/components/page-header";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { MotionPage, MotionSection } from "@/components/ui/motion";
-import { useMockAppStore } from "@/features/app/store";
+import { Skeleton } from "@/components/ui/skeleton";
+import {
+  useCheckInConfigQuery,
+  useUpdateCheckInConfigMutation,
+} from "@/features/app/hooks";
+import type { CheckInConfigInput } from "@/features/app/types";
 import { formatCheckInTime, getCheckInMethodLabel } from "@/features/dashboard/view-model";
 
 const intervalOptions = [6, 8, 12, 24] as const;
 const escalationOptions = [15, 30, 60, 120] as const;
 
 export function CheckInPage() {
-  const config = useMockAppStore((state) => state.checkInConfig);
-  const updateCheckInConfig = useMockAppStore((state) => state.updateCheckInConfig);
+  const { data: config, error, isLoading } = useCheckInConfigQuery();
+  const updateCheckInConfigMutation = useUpdateCheckInConfigMutation();
+
+  if (isLoading) {
+    return (
+      <div className="space-y-4">
+        <Skeleton className="h-24 w-full rounded-[28px]" />
+        <Skeleton className="h-[420px] w-full rounded-[28px]" />
+      </div>
+    );
+  }
+
+  if (!config) {
+    return (
+      <div className="rounded-[24px] border border-border-soft bg-white p-7">
+        <p className="text-xl font-extrabold tracking-[-0.04em] text-foreground">
+          Check-In-Konfiguration nicht verfuegbar
+        </p>
+        <p className="mt-2 text-sm leading-7 text-text-muted">
+          {error instanceof Error ? error.message : "Bitte spaeter erneut versuchen."}
+        </p>
+      </div>
+    );
+  }
+
+  function applyConfigPatch(patch: Partial<CheckInConfigInput>) {
+    updateCheckInConfigMutation.mutate({
+      intervalHours: patch.intervalHours ?? config.intervalHours,
+      escalationDelayMinutes:
+        patch.escalationDelayMinutes ?? config.escalationDelayMinutes,
+      primaryMethod: patch.primaryMethod ?? config.primaryMethod,
+      backupMethod: patch.backupMethod ?? config.backupMethod,
+    });
+  }
 
   return (
     <MotionPage className="space-y-8">
@@ -45,7 +82,8 @@ export function CheckInPage() {
                       key={hours}
                       variant={config.intervalHours === hours ? "primary" : "secondary"}
                       className="justify-between rounded-[20px]"
-                      onClick={() => updateCheckInConfig({ intervalHours: hours })}
+                      onClick={() => applyConfigPatch({ intervalHours: hours })}
+                      disabled={updateCheckInConfigMutation.isPending}
                     >
                       {hours}h
                     </Button>
@@ -70,9 +108,8 @@ export function CheckInPage() {
                         config.escalationDelayMinutes === minutes ? "primary" : "secondary"
                       }
                       className="justify-between rounded-[20px]"
-                      onClick={() =>
-                        updateCheckInConfig({ escalationDelayMinutes: minutes })
-                      }
+                      onClick={() => applyConfigPatch({ escalationDelayMinutes: minutes })}
+                      disabled={updateCheckInConfigMutation.isPending}
                     >
                       {minutes} Min
                     </Button>
@@ -92,7 +129,8 @@ export function CheckInPage() {
                     <button
                       type="button"
                       className="flex w-full items-center justify-between rounded-[18px] border border-border-soft bg-white px-4 py-3 text-left"
-                      onClick={() => updateCheckInConfig({ primaryMethod: "push" })}
+                      onClick={() => applyConfigPatch({ primaryMethod: "push" })}
+                      disabled={updateCheckInConfigMutation.isPending}
                     >
                       <span className="font-semibold text-foreground">
                         Mobile Push-Nachricht
@@ -102,7 +140,8 @@ export function CheckInPage() {
                     <button
                       type="button"
                       className="flex w-full items-center justify-between rounded-[18px] border border-border-soft bg-white px-4 py-3 text-left"
-                      onClick={() => updateCheckInConfig({ backupMethod: "email" })}
+                      onClick={() => applyConfigPatch({ backupMethod: "email" })}
+                      disabled={updateCheckInConfigMutation.isPending}
                     >
                       <span className="font-semibold text-foreground">E-Mail Backup</span>
                       {config.backupMethod === "email" ? <Badge>Backup</Badge> : null}
@@ -139,6 +178,11 @@ export function CheckInPage() {
                 Primaer: {getCheckInMethodLabel(config.primaryMethod)}. Backup:{" "}
                 {getCheckInMethodLabel(config.backupMethod)}.
               </p>
+              {updateCheckInConfigMutation.error ? (
+                <p className="mt-3 text-sm font-semibold text-danger">
+                  {updateCheckInConfigMutation.error.message}
+                </p>
+              ) : null}
             </div>
             <div className="surface-card rounded-[var(--radius-card)] border border-border-soft p-6 sm:p-7">
               <p className="text-sm font-bold uppercase tracking-[0.14em] text-text-subtle">

@@ -4,7 +4,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { motion } from "framer-motion";
 import { ImagePlus, Save, Trash2 } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { startTransition, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { useForm, useWatch } from "react-hook-form";
 
 import { Button } from "@/components/ui/button";
@@ -12,9 +12,13 @@ import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Field, inputClassName } from "@/components/ui/field";
 import { FormSection } from "@/components/ui/form-section";
 import { MotionPage, MotionSection } from "@/components/ui/motion";
-import { useMockAppStore } from "@/features/app/store";
+import { Skeleton } from "@/components/ui/skeleton";
+import {
+  useDeletePetMutation,
+  usePetQuery,
+  useSavePetMutation,
+} from "@/features/app/hooks";
 import { petFormSchema, type PetFormValues } from "@/features/app/schemas";
-import { selectPetById } from "@/features/app/selectors";
 
 type PetFormProps = {
   petId?: string;
@@ -22,13 +26,12 @@ type PetFormProps = {
 
 export function PetForm({ petId }: PetFormProps) {
   const router = useRouter();
-  const pet = useMockAppStore((state) =>
-    petId ? selectPetById(state, petId) : null,
-  );
-  const savePet = useMockAppStore((state) => state.savePet);
-  const deletePet = useMockAppStore((state) => state.deletePet);
-  const [preview, setPreview] = useState<string | null>(pet?.imageUrl ?? null);
+  const { data: pet, error, isLoading } = usePetQuery(petId);
+  const savePetMutation = useSavePetMutation(petId);
+  const deletePetMutation = useDeletePetMutation();
+  const [previewOverride, setPreviewOverride] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const preview = previewOverride ?? pet?.imageUrl ?? null;
 
   const defaultValues = useMemo<PetFormValues>(
     () => ({
@@ -62,6 +65,15 @@ export function PetForm({ petId }: PetFormProps) {
     name: "name",
   });
 
+  if (isLoading) {
+    return (
+      <div className="space-y-4">
+        <Skeleton className="h-28 w-full rounded-[28px]" />
+        <Skeleton className="h-[420px] w-full rounded-[28px]" />
+      </div>
+    );
+  }
+
   if (petId && !pet) {
     return (
       <div className="rounded-[24px] border border-border-soft bg-white p-7">
@@ -69,43 +81,44 @@ export function PetForm({ petId }: PetFormProps) {
           Tier nicht gefunden
         </p>
         <p className="mt-2 text-sm leading-7 text-text-muted">
-          Das angeforderte Tier existiert nicht mehr.
+          {error instanceof Error
+            ? error.message
+            : "Das angeforderte Tier existiert nicht mehr."}
         </p>
       </div>
     );
   }
 
-  function onSubmit(values: PetFormValues) {
-    startTransition(() => {
-      const savedPetId = savePet(
-        {
-          name: values.name,
-          breed: values.breed,
-          ageYears: values.ageYears,
-          weightKg: values.weightKg,
-          chipNumber: values.chipNumber,
-          address: values.address,
-          imageUrl: values.imageUrl ?? preview,
-          medicalProfile: {
-            preExistingConditions: values.preExistingConditions,
-            allergies: values.allergies,
-            medications: values.medications,
-            vaccinationStatus: values.vaccinationStatus,
-            insurance: values.insurance,
-          },
-          veterinarian: {
-            name: values.veterinarianName,
-            phone: values.veterinarianPhone,
-          },
-          feedingNotes: values.feedingNotes,
-          specialNeeds: values.specialNeeds,
-          spareKeyLocation: values.spareKeyLocation,
+  async function onSubmit(values: PetFormValues) {
+    try {
+      const savedPet = await savePetMutation.mutateAsync({
+        name: values.name,
+        breed: values.breed,
+        ageYears: values.ageYears,
+        weightKg: values.weightKg,
+        chipNumber: values.chipNumber,
+        address: values.address,
+        imageUrl: values.imageUrl ?? preview,
+        medicalProfile: {
+          preExistingConditions: values.preExistingConditions,
+          allergies: values.allergies,
+          medications: values.medications,
+          vaccinationStatus: values.vaccinationStatus,
+          insurance: values.insurance,
         },
-        petId,
-      );
+        veterinarian: {
+          name: values.veterinarianName,
+          phone: values.veterinarianPhone,
+        },
+        feedingNotes: values.feedingNotes,
+        specialNeeds: values.specialNeeds,
+        spareKeyLocation: values.spareKeyLocation,
+      });
 
-      router.push(`/pets/${savedPetId}/edit`);
-    });
+      router.push(`/pets/${savedPet.id}/edit`);
+    } catch {
+      // Mutation state already drives the inline error UI.
+    }
   }
 
   async function handleFileChange(file: File | null) {
@@ -114,7 +127,7 @@ export function PetForm({ petId }: PetFormProps) {
     }
 
     const dataUrl = await fileToDataUrl(file);
-    setPreview(dataUrl);
+    setPreviewOverride(dataUrl);
     form.setValue("imageUrl", dataUrl, { shouldDirty: true });
   }
 
@@ -123,6 +136,11 @@ export function PetForm({ petId }: PetFormProps) {
       <MotionPage className="space-y-6">
         <MotionSection>
           <form className="space-y-6" onSubmit={form.handleSubmit(onSubmit)}>
+            {savePetMutation.error ? (
+              <div className="rounded-[22px] border border-danger/20 bg-danger-soft px-5 py-4 text-sm font-semibold text-danger">
+                {savePetMutation.error.message}
+              </div>
+            ) : null}
             <FormSection
               title="Grunddaten"
               description="Foto, Identitaet und Basisdaten fuer das Tierprofil."
@@ -238,15 +256,20 @@ export function PetForm({ petId }: PetFormProps) {
                     variant="danger"
                     onClick={() => setConfirmDelete(true)}
                     className="gap-2"
+                    disabled={deletePetMutation.isPending}
                   >
                     <Trash2 className="h-4 w-4" />
                     Tier loeschen
                   </Button>
                 ) : null}
               </div>
-              <Button type="submit" className="gap-2">
+              <Button
+                type="submit"
+                className="gap-2"
+                disabled={savePetMutation.isPending}
+              >
                 <Save className="h-4 w-4" />
-                Speichern
+                {savePetMutation.isPending ? "Speichert..." : "Speichern"}
               </Button>
             </motion.div>
           </form>
@@ -256,14 +279,19 @@ export function PetForm({ petId }: PetFormProps) {
       <ConfirmDialog
         open={confirmDelete}
         title="Tier wirklich loeschen?"
-        description="Das Tier wird aus der Uebersicht entfernt. Bestehende Check-In-Daten bleiben im Frontend-Mock unangetastet."
+        description="Das Tier wird aus der Live-Uebersicht und dem Notfallprofil entfernt."
+        pending={deletePetMutation.isPending}
+        pendingLabel="Wird geloescht..."
         onClose={() => setConfirmDelete(false)}
         onConfirm={() => {
           if (petId) {
-            deletePet(petId);
+            deletePetMutation.mutate(petId, {
+              onSuccess: () => {
+                setConfirmDelete(false);
+                router.push("/pets");
+              },
+            });
           }
-          setConfirmDelete(false);
-          router.push("/pets");
         }}
       />
     </>

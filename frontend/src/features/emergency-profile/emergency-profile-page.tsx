@@ -3,12 +3,11 @@
 import { motion } from "framer-motion";
 import { Phone, ShieldAlert } from "lucide-react";
 import Link from "next/link";
-import { useMemo } from "react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { selectEmergencyProfile } from "@/features/app/selectors";
-import { useMockAppStore } from "@/features/app/store";
+import { Skeleton } from "@/components/ui/skeleton";
+import { useEmergencyProfileQuery } from "@/features/app/hooks";
 
 type EmergencyProfilePageProps = {
   petId: string;
@@ -17,14 +16,27 @@ type EmergencyProfilePageProps = {
 export function EmergencyProfilePage({
   petId,
 }: EmergencyProfilePageProps) {
-  const state = useMockAppStore((value) => value);
-  const profile = useMemo(() => selectEmergencyProfile(state, petId), [petId, state]);
+  const { data: profile, error, isLoading } = useEmergencyProfileQuery(petId);
+
+  if (isLoading) {
+    return (
+      <div className="space-y-4">
+        <Skeleton className="h-40 w-full rounded-[32px]" />
+        <Skeleton className="h-[520px] w-full rounded-[32px]" />
+      </div>
+    );
+  }
 
   if (!profile) {
     return (
       <div className="mx-auto max-w-4xl rounded-[30px] border border-danger/20 bg-white p-10">
         <p className="text-2xl font-extrabold tracking-[-0.05em] text-foreground">
           Notfall-Profil nicht gefunden
+        </p>
+        <p className="mt-2 text-sm leading-7 text-text-muted">
+          {error instanceof Error
+            ? error.message
+            : "Das angeforderte Profil ist nicht verfuegbar."}
         </p>
       </div>
     );
