@@ -97,3 +97,66 @@ Backend tests (`conftest.py`) create a **temporary PostgreSQL database** per ses
 - **Mutations invalidate related queries**: Follow the pattern in `src/features/app/hooks.ts` — `onSuccess` invalidates dependent query keys.
 - **ESLint**: Uses `eslint-config-next` with core-web-vitals + TypeScript configs.
 - **Backend linting**: Ruff with rules `E, F, I, B, UP, N`. Line length 100. Target Python 3.12. B008 ignored in `dependencies.py` (standard FastAPI `Depends()` pattern).
+
+## Check-In Engine (Phase 5)
+
+### Backend
+- **Escalation state machine** (on-demand, no scheduler): `compute_escalation_state()` in `app/services/check_in.py`
+  - `NORMAL`: now < next_scheduled_at
+  - `PENDING`: next_scheduled_at ≤ now < next_scheduled_at + escalation_delay_minutes
+  - `ESCALATED`: now ≥ next_scheduled_at + escalation_delay_minutes
+- **EscalationEvent model** in `app/db/models.py` — tracks escalation start/resolve times
+- **Migration**: `alembic/versions/0003_escalation.py`
+- **Endpoints** (`app/api/routes/check_in.py`):
+  - `POST /check-in/acknowledge` — acknowledge check-in, reset timer, resolve active escalation
+  - `GET /check-in/status` — current escalation state
+  - `GET /check-in/events` — check-in event history
+  - `GET /check-in/escalation-history` — escalation event history
+  - `GET/PUT /check-in-config` — config CRUD
+- **Dashboard** (`app/services/dashboard.py`) — uses `compute_escalation_state()` for real escalation status with `escalation_deadline`
+- **Tests**: `backend/tests/test_check_in.py` (unit tests for state machine), `backend/tests/test_api.py` (integration tests)
+
+### Frontend
+- **Query keys**: `checkInStatus`, `checkInEvents`, `escalationHistory` in `query-keys.ts`
+- **Hooks**: `useAcknowledgeCheckInMutation`, `useCheckInEventsQuery`, `useEscalationHistoryQuery` in `hooks.ts`
+- **Dashboard** (`dashboard-page.tsx`): escalation card shows deadline countdown + "Ich bin okay" acknowledge button when pending/escalated
+- **NextCheckInCountdown**: danger tone (red + bold) when overdue
+- **EscalationStatusCard**: embeds acknowledge action + deadline countdown via `formatDeadlineCountdown` helper
+- **Check-in page** (`check-in-page.tsx`): shows event history + escalation history + notification history below config
+
+## Notification Engine (Phase 6)
+
+### Backend
+- **Scheduler**: APScheduler `BackgroundScheduler` in `app/services/scheduler.py`, runs every 60s, starts/stops with FastAPI lifespan
+- **Dispatcher** (`app/services/notification_dispatcher.py`):
+  - PENDING state → sends reminder email to owner (once per cycle, dedup via NotificationLog)
+  - ESCALATED state → notifies emergency contacts sequentially in priority order (5-min gap between contacts)
+- **Email service** (`app/services/email.py`): SMTP via Python stdlib (`smtplib`), plain text emails, German templates
+- **NotificationLog model** in `app/db/models.py` — id, owner_id, escalation_event_id, recipient_email, notification_type (reminder/escalation_alert), status (sent/failed), error_message
+- **Migration**: `alembic/versions/0004_notification_logs.py`
+- **Repository**: `app/repositories/notification.py` — dedup queries, log creation, list history
+- **Endpoint**: `GET /notifications` — notification logs for authenticated owner (newest first, limit 50)
+- **Config**: SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASSWORD, SMTP_FROM, APP_URL env vars
+
+### Frontend
+- **Type**: `NotificationLogItem` in `dashboard/types.ts`
+- **Query key**: `notifications` in `query-keys.ts`
+- **Hook**: `useNotificationLogsQuery` in `hooks.ts`
+- **Component**: `NotificationHistoryCard` in `check-in/components/notification-history-card.tsx`
+- **Check-in page**: notification history section below escalation history
+
+## Emergency Contact Experience (Phase 7)
+
+### Backend
+- **ResponderAcknowledgment model** in `app/db/models.py` — id, escalation_event_id, pet_id, responder_email, responder_name, created_at; unique constraint on (escalation_event_id, responder_email)
+- **Migration**: `alembic/versions/0005_responder_acknowledgments.py`
+- **Repository**: `app/repositories/responder.py` — create_acknowledgment, has_acknowledged, count_acknowledgments
+- **Endpoint**: `POST /public/emergency-profile/{token}/acknowledge` — accepts {email, name?}, idempotent (dedup by email), sends email to owner on success
+- **EmergencyProfileDTO extended**: added `escalationContext` (startedAt, acknowledgmentCount), `feedingNotes`, `spareKeyLocation`
+- **Escalation context**: `build_emergency_profile_for_pet()` now includes escalation state + acknowledgment count when escalated
+
+### Frontend
+- **Emergency profile page** rewritten with: pet image, breed/age/weight, address, spare key location, feeding notes, contact capabilities (has key, can take dog, contact notes)
+- **Escalation banner**: shown on public profile when escalation is active, shows minutes since escalation + acknowledgment count
+- **"Ich kümmere mich" action**: form for responders to acknowledge (email + optional name), calls POST endpoint, shows confirmation
+- **Mobile responsive**: responsive font sizes, larger touch targets, responsive header layout

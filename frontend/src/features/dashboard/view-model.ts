@@ -6,7 +6,6 @@ import type {
   EscalationMode,
   EmergencyChainStatus,
 } from "@/features/dashboard/types";
-
 const dayLabelFormatter = new Intl.DateTimeFormat("de-DE", {
   weekday: "long",
 });
@@ -103,6 +102,33 @@ export function formatRelativeCheckIn(targetIso: string, now = new Date()) {
   }
 
   return `${Math.abs(minutes)} Min ueberfaellig`;
+}
+
+export function formatDeadlineCountdown(
+  deadlineIso: string,
+  mode: EscalationMode,
+  now = new Date(),
+) {
+  const deadline = new Date(deadlineIso).getTime();
+  const absMinutes = Math.abs(Math.round((deadline - now.getTime()) / 60000));
+
+  if (mode === "pending") {
+    return absMinutes <= 0 ? "Eskalation droht" : `Eskalation in ${absMinutes} Min`;
+  }
+
+  return `Seit ${absMinutes} Min eskaliert`;
+}
+
+export function getNotificationTypeLabel(type: string) {
+  if (type === "reminder") return "Erinnerung";
+  if (type === "escalation_alert") return "Eskalationsalarm";
+  return type;
+}
+
+export function getNotificationStatusLabel(status: string) {
+  if (status === "sent") return "Gesendet";
+  if (status === "failed") return "Fehlgeschlagen";
+  return status;
 }
 
 function startOfDay(value: Date) {

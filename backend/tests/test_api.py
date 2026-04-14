@@ -199,3 +199,44 @@ def test_emergency_access_token_endpoint(client, auth_headers):
     assert regenerate_response.status_code == status.HTTP_200_OK
     new_data = regenerate_response.json()
     assert new_data["access_token"] != "token-bello-public"
+
+
+def test_check_in_acknowledge_creates_event(client, auth_headers):
+    response = client.post("/check-in/acknowledge", headers=auth_headers)
+    assert response.status_code == status.HTTP_200_OK
+    data = response.json()
+    assert data["mode"] == "normal"
+    assert data["nextCheckInAt"]
+
+
+def test_check_in_status_returns_normal(client, auth_headers):
+    response = client.get("/check-in/status", headers=auth_headers)
+    assert response.status_code == status.HTTP_200_OK
+    data = response.json()
+    assert data["mode"] == "normal"
+
+
+def test_check_in_events_returns_history(client, auth_headers):
+    # First acknowledge to create an event.
+    client.post("/check-in/acknowledge", headers=auth_headers)
+
+    response = client.get("/check-in/events", headers=auth_headers)
+    assert response.status_code == status.HTTP_200_OK
+    events = response.json()
+    assert len(events) >= 1
+    assert events[0]["status"] == "acknowledged"
+    assert events[0]["method"] == "webapp"
+
+
+def test_escalation_history_empty_initially(client, auth_headers):
+    response = client.get("/check-in/escalation-history", headers=auth_headers)
+    assert response.status_code == status.HTTP_200_OK
+    assert response.json() == []
+
+
+def test_dashboard_escalation_status_is_dynamic(client, auth_headers):
+    response = client.get("/dashboard/summary", headers=auth_headers)
+    assert response.status_code == status.HTTP_200_OK
+    escalation = response.json()["escalationStatus"]
+    assert escalation["mode"] == "normal"
+    assert escalation["title"] == "Normalbetrieb"

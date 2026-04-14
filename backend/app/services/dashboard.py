@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from sqlalchemy.orm import Session
 
 from app.repositories.check_in import get_check_in_config, list_recent_check_in_events
@@ -9,6 +11,7 @@ from app.schemas.dashboard import (
     EscalationStatusDTO,
     MonitoredPetDTO,
 )
+from app.services.check_in import build_escalation_display, compute_escalation_state
 
 
 def build_dashboard_summary(session: Session, owner_id: str) -> DashboardSummaryDTO:
@@ -19,11 +22,14 @@ def build_dashboard_summary(session: Session, owner_id: str) -> DashboardSummary
 
     primary_pet = pets[0] if pets else None
 
+    mode, deadline = compute_escalation_state(config)
+    escalation_display = build_escalation_display(mode, deadline)
+
     return DashboardSummaryDTO.model_validate(
         {
             "pet_count": len(pets),
             "emergency_chain_status": "active" if len(contacts) >= 2 else "inactive",
-            "next_check_in_at": config.next_scheduled_at.isoformat() if config else None,
+            "next_check_in_at": (config.next_scheduled_at.isoformat() if config else None),
             "recent_check_ins": [
                 CheckInHistoryItemDTO(
                     id=event.id,
@@ -33,11 +39,7 @@ def build_dashboard_summary(session: Session, owner_id: str) -> DashboardSummary
                 )
                 for event in check_in_events
             ],
-            "escalation_status": EscalationStatusDTO(
-                mode="normal",
-                title="Normalbetrieb",
-                description="Alle Systeme laufen. Keine aktive Rettungskette.",
-            ),
+            "escalation_status": EscalationStatusDTO(**escalation_display),
             "monitored_pet": MonitoredPetDTO(
                 id=primary_pet.id,
                 name=primary_pet.name,

@@ -7,6 +7,7 @@ from app.api.routes import (
     emergency_chain,
     emergency_profile,
     health,
+    notifications,
     pets,
     public,
 )
@@ -20,3 +21,4 @@ api_router.include_router(pets.router)
 api_router.include_router(emergency_chain.router)
 api_router.include_router(check_in.router)
 api_router.include_router(emergency_profile.router)
+api_router.include_router(notifications.router)

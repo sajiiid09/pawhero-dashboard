@@ -21,6 +21,16 @@ class Settings(BaseSettings):
     )
     jwt_access_token_expire_minutes: int = 60
 
+    smtp_host: str = Field(default="localhost", validation_alias=AliasChoices("SMTP_HOST"))
+    smtp_port: int = Field(default=587, validation_alias=AliasChoices("SMTP_PORT"))
+    smtp_user: str = Field(default="", validation_alias=AliasChoices("SMTP_USER"))
+    smtp_password: str = Field(default="", validation_alias=AliasChoices("SMTP_PASSWORD"))
+    smtp_from: str = Field(
+        default="Pfoten-Held <noreply@localhost>",
+        validation_alias=AliasChoices("SMTP_FROM"),
+    )
+    app_url: str = Field(default="http://localhost:3000", validation_alias=AliasChoices("APP_URL"))
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",

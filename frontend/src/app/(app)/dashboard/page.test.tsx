@@ -33,6 +33,11 @@ vi.mock("@/features/app/hooks", () => ({
     error: null,
     isLoading: false,
   }),
+  useAcknowledgeCheckInMutation: () => ({
+    mutate: vi.fn(),
+    isPending: false,
+    isError: false,
+  }),
 }));
 
 describe("DashboardPage", () => {
