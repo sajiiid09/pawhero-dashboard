@@ -86,3 +86,38 @@ def build_responder_ack_email(
         "Pfoten-Held Notfall-System"
     )
     return subject, body
+
+
+def build_email_verification_otp_email(
+    owner_name: str,
+    otp_code: str,
+    app_url: str,
+    expires_minutes: int,
+) -> tuple[str, str]:
+    subject = "Pfoten-Held: Bestaetige deine E-Mail-Adresse"
+    body = (
+        f"Hallo {owner_name},\n\n"
+        "willkommen bei Pfoten-Held. Bitte bestaetige deine E-Mail-Adresse mit "
+        "dem folgenden Code:\n\n"
+        f"{otp_code}\n\n"
+        f"Der Code ist {expires_minutes} Minuten gueltig.\n\n"
+        f"Zur Verifizierung: {app_url}/register/verify\n\n"
+        "Falls du dich nicht registriert hast, kannst du diese E-Mail ignorieren.\n\n"
+        "Dein Pfoten-Held Team"
+    )
+    return subject, body
+
+
+def send_verification_email(
+    to_email: str,
+    owner_name: str,
+    otp_code: str,
+) -> None:
+    settings = get_settings()
+    subject, body = build_email_verification_otp_email(
+        owner_name=owner_name,
+        otp_code=otp_code,
+        app_url=settings.app_url,
+        expires_minutes=settings.email_verification_ttl_minutes,
+    )
+    send_email(to=to_email, subject=subject, body=body)

@@ -13,7 +13,7 @@ export type CheckInHistoryItem = {
 export type DashboardSummary = {
   petCount: number;
   emergencyChainStatus: EmergencyChainStatus;
-  nextCheckInAt: string;
+  nextCheckInAt: string | null;
   recentCheckIns: CheckInHistoryItem[];
   escalationStatus: {
     mode: EscalationMode;

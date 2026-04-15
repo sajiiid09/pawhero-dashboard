@@ -98,8 +98,20 @@ export function toCheckInRows(items: CheckInHistoryItem[], now = new Date()) {
   }));
 }
 
-export function formatRelativeCheckIn(targetIso: string, now = new Date()) {
+export function formatRelativeCheckIn(
+  targetIso: string | null | undefined,
+  now = new Date(),
+) {
+  if (!targetIso) {
+    return "Nicht geplant";
+  }
+
   const target = new Date(targetIso).getTime();
+
+  if (Number.isNaN(target)) {
+    return "Zeitpunkt ungueltig";
+  }
+
   const minutes = Math.round((target - now.getTime()) / 60000);
 
   if (minutes > 0) {

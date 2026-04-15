@@ -18,4 +18,10 @@ describe("NextCheckInCountdown", () => {
 
     expect(screen.getByText("in 42 Min")).toBeInTheDocument();
   });
+
+  it("renders a safe fallback when no schedule is available", () => {
+    render(<NextCheckInCountdown targetIso={null} />);
+
+    expect(screen.getByText("Nicht geplant")).toBeInTheDocument();
+  });
 });

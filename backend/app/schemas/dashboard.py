@@ -28,7 +28,7 @@ class MonitoredPetDTO(AppSchema):
 class DashboardSummaryDTO(AppSchema):
     pet_count: int = Field(alias="petCount")
     emergency_chain_status: str = Field(alias="emergencyChainStatus")
-    next_check_in_at: str = Field(alias="nextCheckInAt")
+    next_check_in_at: str | None = Field(alias="nextCheckInAt", default=None)
     recent_check_ins: list[CheckInHistoryItemDTO] = Field(alias="recentCheckIns")
     escalation_status: EscalationStatusDTO = Field(alias="escalationStatus")
     monitored_pet: MonitoredPetDTO | None = Field(alias="monitoredPet")
