@@ -5,6 +5,7 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useMemo,
   useState,
   type ReactNode,
 } from "react";
@@ -44,8 +45,16 @@ function loadStoredAuth(): { token: string | null; user: AuthUser | null } {
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [token, setToken] = useState<string | null>(() => loadStoredAuth().token);
-  const [user, setUser] = useState<AuthUser | null>(() => loadStoredAuth().user);
+  const [token, setToken] = useState<string | null>(null);
+  const [user, setUser] = useState<AuthUser | null>(null);
+  const [hydrated, setHydrated] = useState(false);
+
+  useEffect(() => {
+    const storedAuth = loadStoredAuth();
+    setToken(storedAuth.token);
+    setUser(storedAuth.user);
+    setHydrated(true);
+  }, []);
 
   const setAuth = useCallback((newToken: string, newUser: AuthUser) => {
     localStorage.setItem(TOKEN_KEY, newToken);
@@ -77,19 +86,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
   }, [logout]);
 
-  return (
-    <AuthContext.Provider
-      value={{
-        user,
-        token,
-        isAuthenticated: Boolean(token && user),
-        setAuth,
-        logout,
-      }}
-    >
-      {children}
-    </AuthContext.Provider>
+  const value = useMemo(
+    () => ({
+      user,
+      token,
+      isAuthenticated: hydrated && Boolean(token && user),
+      setAuth,
+      logout,
+    }),
+    [hydrated, logout, setAuth, token, user],
   );
+
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
 
 export function useAuth(): AuthContextValue {
