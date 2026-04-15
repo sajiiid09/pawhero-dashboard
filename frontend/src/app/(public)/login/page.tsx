@@ -4,11 +4,22 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 
 import { useLoginMutation } from "@/features/auth/hooks";
+import {
+  LOGIN_REASON_STORAGE_KEY,
+  SESSION_EXPIRED_REASON,
+} from "@/features/auth/auth-context";
 import { loginSchema, type LoginFormData } from "@/features/auth/schemas";
+import { useHydrated } from "@/lib/use-hydrated";
 import Link from "next/link";
 
 export default function LoginPage() {
   const login = useLoginMutation();
+  const mounted = useHydrated();
+
+  const showSessionExpiredBanner =
+    mounted &&
+    typeof window !== "undefined" &&
+    sessionStorage.getItem(LOGIN_REASON_STORAGE_KEY) === SESSION_EXPIRED_REASON;
 
   const {
     register,
@@ -29,6 +40,12 @@ export default function LoginPage() {
           <h1 className="text-2xl font-bold text-slate-800">Pfoten-Held</h1>
           <p className="mt-1 text-sm text-slate-500">Melden Sie sich an</p>
         </div>
+
+        {showSessionExpiredBanner && (
+          <div className="mb-4 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+            Ihre Sitzung ist abgelaufen. Bitte melden Sie sich erneut an.
+          </div>
+        )}
 
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
           <div>
