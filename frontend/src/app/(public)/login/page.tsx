@@ -91,7 +91,17 @@ export default function LoginPage() {
           </div>
 
           {login.error && (
-            <p className="text-sm text-red-600">{login.error.message}</p>
+            <div className="space-y-2">
+              <p className="text-sm text-red-600">{login.error.message}</p>
+              {login.error.message.includes("OTP") && (
+                <Link
+                  href="/register/verify"
+                  className="inline-block text-xs font-semibold text-blue-700 hover:text-blue-800"
+                >
+                  Zur OTP-Verifizierung
+                </Link>
+              )}
+            </div>
           )}
 
           <button

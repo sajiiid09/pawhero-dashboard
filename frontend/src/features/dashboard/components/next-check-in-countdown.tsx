@@ -6,7 +6,7 @@ import { cn } from "@/lib/utils";
 import { formatRelativeCheckIn } from "@/features/dashboard/view-model";
 
 type NextCheckInCountdownProps = {
-  targetIso: string;
+  targetIso: string | null | undefined;
 };
 
 export function NextCheckInCountdown({

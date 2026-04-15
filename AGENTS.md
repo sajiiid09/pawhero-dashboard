@@ -58,10 +58,16 @@ Backend tests (`conftest.py`) create a **temporary PostgreSQL database** per ses
 
 ## Auth Architecture
 
-- **Backend**: JWT-based auth. `POST /auth/register` and `POST /auth/login` issue access tokens. All protected routes use `OwnerId` dependency (`app/api/dependencies.py`) which extracts owner_id from the Bearer token.
+- **Backend**: JWT-based auth with email verification for **new registrations**.
+  - `POST /auth/register`: creates/updates an unverified owner, sends OTP by email, returns verification-pending payload (no access token).
+  - `POST /auth/verify-otp`: verifies OTP and issues access token.
+  - `POST /auth/resend-otp`: re-sends OTP for unverified users (cooldown enforced).
+  - `POST /auth/login`: issues access token only for verified users.
+  - New registrations also receive a default check-in config so dashboard summary works immediately.
+  - All protected routes use `OwnerId` dependency (`app/api/dependencies.py`) which extracts owner_id from the Bearer token.
 - **Frontend**: Auth state in `src/features/auth/auth-context.tsx`. Token stored in localStorage, synced to `apiRequest()` via `setAuthToken()` in `api-client.ts`.
 - **Public emergency profiles**: Tokenized access via `GET /public/emergency-profile/{token}` — no auth required. Tokens are auto-generated per pet and accessible at `GET /pets/{petId}/emergency-access-token`.
-- **Route protection**: `(app)/layout.tsx` redirects to `/login` if not authenticated. `(public)/` routes (login, register, `/s/[token]`) are accessible without auth.
+- **Route protection**: `(app)/layout.tsx` redirects to `/login` if not authenticated. `(public)/` routes (login, register, register verify OTP, `/s/[token]`) are accessible without auth.
 - **Demo credentials**: `demo@pfoten-held.de` / `demo1234` (seeded by `app/db/seed.py`).
 
 ## Frontend Architecture
@@ -69,7 +75,7 @@ Backend tests (`conftest.py`) create a **temporary PostgreSQL database** per ses
 - **Path alias**: `@/*` → `frontend/src/*`
 - **Route groups**:
   - `src/app/(app)/` — authenticated dashboard shell (sidebar + header layout)
-  - `src/app/(public)/` — public routes: login, register, shared emergency profile (`/s/[token]`)
+  - `src/app/(public)/` — public routes: login, register, register verify OTP, shared emergency profile (`/s/[token]`)
   - Emergency chain uses a `@modal` parallel route slot for contact dialogs
 - **Feature domains**: `src/features/{auth,dashboard,pets,emergency-chain,check-in,emergency-profile}/`
 - **Shared app state**: `src/features/app/` — types, API functions, TanStack Query hooks, query keys
@@ -86,6 +92,8 @@ Backend tests (`conftest.py`) create a **temporary PostgreSQL database** per ses
 - **Layering**: `api/routes/` → `services/` → `repositories/` → `db/models.py`
 - **Schemas**: Pydantic models in `app/schemas/` (one file per domain)
 - **Config**: `app/core/config.py` via `pydantic-settings` (reads `DATABASE_URL`, `CORS_ORIGINS`, `JWT_SECRET_KEY`)
+  - `JWT_SECRET_KEY` must be >= 32 bytes (startup validation)
+  - OTP settings: `EMAIL_VERIFICATION_TTL_MINUTES`, `EMAIL_VERIFICATION_RESEND_COOLDOWN_SECONDS`
 - **Migrations**: Alembic (`alembic/`). Always create migrations for schema changes.
 - **Models**: SQLAlchemy 2.0 declarative with `Mapped` columns. All models in `app/db/models.py`.
 - **Auth service**: `app/services/auth.py` — password hashing (bcrypt), JWT creation/verification, ID generation.

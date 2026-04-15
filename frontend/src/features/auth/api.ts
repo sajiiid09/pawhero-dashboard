@@ -1,8 +1,16 @@
 import { apiRequest } from "@/lib/api-client";
-import type { AuthTokenResponse, LoginInput, RegisterInput } from "./types";
+import type {
+  AuthTokenResponse,
+  LoginInput,
+  RegisterInput,
+  RegisterResponse,
+  ResendOtpInput,
+  ResendOtpResponse,
+  VerifyOtpInput,
+} from "./types";
 
 export function registerUser(input: RegisterInput) {
-  return apiRequest<AuthTokenResponse>("/auth/register", {
+  return apiRequest<RegisterResponse>("/auth/register", {
     method: "POST",
     body: JSON.stringify({
       email: input.email,
@@ -18,6 +26,25 @@ export function loginUser(input: LoginInput) {
     body: JSON.stringify({
       email: input.email,
       password: input.password,
+    }),
+  });
+}
+
+export function verifyOtp(input: VerifyOtpInput) {
+  return apiRequest<AuthTokenResponse>("/auth/verify-otp", {
+    method: "POST",
+    body: JSON.stringify({
+      email: input.email,
+      code: input.code,
+    }),
+  });
+}
+
+export function resendOtp(input: ResendOtpInput) {
+  return apiRequest<ResendOtpResponse>("/auth/resend-otp", {
+    method: "POST",
+    body: JSON.stringify({
+      email: input.email,
     }),
   });
 }

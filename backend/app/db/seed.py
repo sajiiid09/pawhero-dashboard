@@ -29,6 +29,7 @@ def seed_demo_data() -> None:
             email="demo@pfoten-held.de",
             display_name="Pfoten-Held Demo",
             password_hash=hash_password("demo1234"),
+            email_verified=True,
         )
         session.add(owner)
 

@@ -1,8 +1,10 @@
-from fastapi import status
 from uuid import uuid4
 
-from app.db.models import NotificationLog
+from fastapi import status
+
+from app.db.models import NotificationLog, Owner
 from app.db.session import get_session_factory
+from app.services.auth import create_access_token, hash_password
 
 
 def test_healthcheck(client):
@@ -130,7 +132,19 @@ def test_check_in_config_updates_next_scheduled_at(client, auth_headers):
     assert payload["nextScheduledAt"]
 
 
-def test_auth_register_and_login(client):
+def test_auth_register_verify_and_login(client, monkeypatch):
+    captured_otp_codes: dict[str, str] = {}
+
+    def fake_send_verification_email(
+        to_email: str,
+        owner_name: str,
+        otp_code: str,
+    ) -> None:
+        del owner_name
+        captured_otp_codes[to_email] = otp_code
+
+    monkeypatch.setattr("app.api.routes.auth.send_verification_email", fake_send_verification_email)
+
     register_response = client.post(
         "/auth/register",
         json={
@@ -141,8 +155,51 @@ def test_auth_register_and_login(client):
     )
     assert register_response.status_code == status.HTTP_201_CREATED
     register_data = register_response.json()
-    assert "access_token" in register_data
+    assert register_data["verification_required"] is True
+    assert "access_token" not in register_data
     assert register_data["display_name"] == "Test User"
+    otp_code = captured_otp_codes["new-user@example.com"]
+
+    resend_response = client.post(
+        "/auth/resend-otp",
+        json={"email": "new-user@example.com"},
+    )
+    assert resend_response.status_code == status.HTTP_429_TOO_MANY_REQUESTS
+
+    blocked_login_response = client.post(
+        "/auth/login",
+        json={
+            "email": "new-user@example.com",
+            "password": "secure123",
+        },
+    )
+    assert blocked_login_response.status_code == status.HTTP_403_FORBIDDEN
+
+    invalid_otp_response = client.post(
+        "/auth/verify-otp",
+        json={
+            "email": "new-user@example.com",
+            "code": "000000" if otp_code != "000000" else "999999",
+        },
+    )
+    assert invalid_otp_response.status_code == status.HTTP_401_UNAUTHORIZED
+
+    verify_response = client.post(
+        "/auth/verify-otp",
+        json={
+            "email": "new-user@example.com",
+            "code": otp_code,
+        },
+    )
+    assert verify_response.status_code == status.HTTP_200_OK
+    verify_data = verify_response.json()
+    assert "access_token" in verify_data
+
+    resend_after_verify = client.post(
+        "/auth/resend-otp",
+        json={"email": "new-user@example.com"},
+    )
+    assert resend_after_verify.status_code == status.HTTP_400_BAD_REQUEST
 
     login_response = client.post(
         "/auth/login",
@@ -244,6 +301,36 @@ def test_dashboard_escalation_status_is_dynamic(client, auth_headers):
     escalation = response.json()["escalationStatus"]
     assert escalation["mode"] == "normal"
     assert escalation["title"] == "Normalbetrieb"
+
+
+def test_dashboard_summary_returns_200_for_owner_without_checkin_config(client):
+    owner_id = f"owner-{uuid4().hex[:8]}"
+    session = get_session_factory()()
+
+    try:
+        session.add(
+            Owner(
+                id=owner_id,
+                email=f"{owner_id}@example.com",
+                display_name="No Config",
+                password_hash=hash_password("secure123"),
+                email_verified=True,
+            )
+        )
+        session.commit()
+    finally:
+        session.close()
+
+    token = create_access_token(owner_id)
+    response = client.get(
+        "/dashboard/summary",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+
+    assert response.status_code == status.HTTP_200_OK
+    payload = response.json()
+    assert payload["petCount"] == 0
+    assert payload["nextCheckInAt"] is None
 
 
 def test_notifications_response_uses_camel_case(client, auth_headers):
