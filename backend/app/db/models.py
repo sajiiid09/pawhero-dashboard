@@ -16,6 +16,18 @@ class CheckInMethod(StrEnum):
     WEBAPP = "webapp"
 
 
+class NotificationChannel(StrEnum):
+    PUSH = "push"
+    EMAIL = "email"
+
+
+class NotificationType(StrEnum):
+    OWNER_REMINDER = "owner_reminder"
+    OWNER_ESCALATION = "owner_escalation"
+    EMERGENCY_CONTACT_ESCALATION = "emergency_contact_escalation"
+    RESPONDER_ACKNOWLEDGMENT = "responder_acknowledgment"
+
+
 class CheckInStatus(StrEnum):
     ACKNOWLEDGED = "acknowledged"
     MISSED = "missed"
@@ -202,6 +214,7 @@ class NotificationLog(TimestampMixin, Base):
         ForeignKey("escalation_events.id", ondelete="SET NULL"), nullable=True
     )
     recipient_email: Mapped[str] = mapped_column(String(255), nullable=False)
+    channel: Mapped[str] = mapped_column(String(16), nullable=False)
     notification_type: Mapped[str] = mapped_column(String(32), nullable=False)
     status: Mapped[str] = mapped_column(String(16), nullable=False)
     error_message: Mapped[str | None] = mapped_column(Text, nullable=True)

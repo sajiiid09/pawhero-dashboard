@@ -68,7 +68,7 @@ export function CheckInPage() {
         <PageHeader
           eyebrow="Pfoten-Held"
           title="Check-In Konfiguration"
-          description="Stimme Sicherheitsniveau und Komfort ab. Die Auswahl beeinflusst die naechste geplante Rueckmeldung und die Eskalationszeit."
+          description="Stimme Sicherheitsniveau und Komfort ab. Bei ausbleibendem Check-In werden Push und E-Mail in dieser Demo parallel ausgeloest."
         />
       </MotionSection>
 
@@ -144,7 +144,9 @@ export function CheckInPage() {
                       <span className="font-semibold text-foreground">
                         Mobile Push-Nachricht
                       </span>
-                      {config.primaryMethod === "push" ? <Badge tone="success">Primaer</Badge> : null}
+                      {config.primaryMethod === "push" ? (
+                        <Badge tone="success">Aktiv</Badge>
+                      ) : null}
                     </button>
                     <button
                       type="button"
@@ -152,10 +154,13 @@ export function CheckInPage() {
                       onClick={() => applyConfigPatch({ backupMethod: "email" })}
                       disabled={updateCheckInConfigMutation.isPending}
                     >
-                      <span className="font-semibold text-foreground">E-Mail Backup</span>
-                      {config.backupMethod === "email" ? <Badge>Backup</Badge> : null}
+                      <span className="font-semibold text-foreground">E-Mail</span>
+                      {config.backupMethod === "email" ? <Badge>Aktiv</Badge> : null}
                     </button>
                   </div>
+                  <p className="text-sm leading-7 text-text-muted">
+                    Sobald ein Check-In ausbleibt, werden Push und E-Mail gleichzeitig an die Halterin oder den Halter gesendet.
+                  </p>
                 </div>
 
                 <div className="rounded-[22px] bg-warning-soft p-5">
@@ -184,8 +189,8 @@ export function CheckInPage() {
                 {formatCheckInTime(config.nextScheduledAt)}
               </p>
               <p className="mt-3 text-sm leading-7 text-text-muted">
-                Primaer: {getCheckInMethodLabel(config.primaryMethod)}. Backup:{" "}
-                {getCheckInMethodLabel(config.backupMethod)}.
+                Aktiv: {getCheckInMethodLabel(config.primaryMethod)} und{" "}
+                {getCheckInMethodLabel(config.backupMethod)} parallel.
               </p>
               {updateCheckInConfigMutation.error ? (
                 <p className="mt-3 text-sm font-semibold text-danger">

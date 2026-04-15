@@ -52,6 +52,7 @@ export type EscalationEventItem = {
 export type NotificationLogItem = {
   id: string;
   recipientEmail: string;
+  channel: "push" | "email";
   notificationType: string;
   status: string;
   errorMessage: string | null;

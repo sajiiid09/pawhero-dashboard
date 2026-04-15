@@ -3,7 +3,8 @@ from sqlalchemy import select
 
 from app.api.dependencies import DbSession
 from app.core.config import get_settings
-from app.db.models import Owner
+from app.db.models import NotificationChannel, NotificationType, Owner
+from app.repositories import notification as notification_repo
 from app.repositories import responder as responder_repo
 from app.repositories.check_in import get_active_escalation
 from app.repositories.pets import get_pet_by_access_token
@@ -70,20 +71,54 @@ def acknowledge_emergency(
     )
     session.commit()
 
-    # Notify owner (best-effort, don't fail on email error).
-    try:
-        owner = session.scalar(select(Owner).where(Owner.id == pet.owner_id))
-        if owner:
-            settings = get_settings()
-            responder_label = payload.name or payload.email
-            subject, body = build_responder_ack_email(
-                owner_name=owner.display_name,
-                responder_name=responder_label,
-                pet_name=pet.name,
-                app_url=settings.app_url,
-            )
-            send_email(to=owner.email, subject=subject, body=body)
-    except Exception:
-        pass  # best-effort
+    _notify_owner_about_responder_ack(
+        session=session,
+        owner_id=pet.owner_id,
+        escalation_event_id=active_escalation.id,
+        pet_name=pet.name,
+        responder_name=payload.name or payload.email,
+    )
 
     return ResponderAckResponse(success=True)
+
+
+def _notify_owner_about_responder_ack(
+    *,
+    session: DbSession,
+    owner_id: str,
+    escalation_event_id: str,
+    pet_name: str,
+    responder_name: str,
+) -> None:
+    owner = session.scalar(select(Owner).where(Owner.id == owner_id))
+    if owner is None:
+        return
+
+    settings = get_settings()
+    subject, body = build_responder_ack_email(
+        owner_name=owner.display_name,
+        responder_name=responder_name,
+        pet_name=pet_name,
+        app_url=settings.app_url,
+    )
+
+    status_value = "sent"
+    error_message = None
+    try:
+        send_email(to=owner.email, subject=subject, body=body)
+    except Exception as exc:
+        status_value = "failed"
+        error_message = str(exc)[:500]
+
+    notification_repo.create_notification_log(
+        session,
+        log_id=generate_id(),
+        owner_id=owner_id,
+        escalation_event_id=escalation_event_id,
+        recipient_email=owner.email,
+        channel=NotificationChannel.EMAIL,
+        notification_type=NotificationType.RESPONDER_ACKNOWLEDGMENT,
+        status=status_value,
+        error_message=error_message,
+    )
+    session.commit()

@@ -6,6 +6,7 @@ from app.schemas.common import AppSchema
 class NotificationLogDTO(AppSchema):
     id: str
     recipient_email: str = Field(alias="recipientEmail")
+    channel: str
     notification_type: str = Field(alias="notificationType")
     status: str
     error_message: str | None = Field(alias="errorMessage", default=None)

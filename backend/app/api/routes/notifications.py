@@ -21,6 +21,7 @@ def _serialize(log: NotificationLog) -> NotificationLogDTO:
     return NotificationLogDTO(
         id=log.id,
         recipient_email=log.recipient_email,
+        channel=log.channel,
         notification_type=log.notification_type,
         status=log.status,
         error_message=log.error_message,

@@ -4,6 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import type { NotificationLogItem } from "@/features/dashboard/types";
 import {
+  getNotificationChannelLabel,
   formatCheckInTime,
   getNotificationStatusLabel,
   getNotificationTypeLabel,
@@ -31,8 +32,9 @@ export function NotificationHistoryCard({ logs }: NotificationHistoryCardProps) 
           </div>
         ) : (
           <>
-            <div className="hidden grid-cols-[1fr_1.2fr_0.8fr_1fr] gap-4 border-b border-border-soft px-2 pb-3 text-sm font-bold text-text-muted md:grid">
+            <div className="hidden grid-cols-[1.2fr_1fr_1.2fr_0.8fr_1fr] gap-4 border-b border-border-soft px-2 pb-3 text-sm font-bold text-text-muted md:grid">
               <span>Typ</span>
+              <span>Kanal</span>
               <span>Empfaenger</span>
               <span>Status</span>
               <span>Zeitpunkt</span>
@@ -45,7 +47,7 @@ export function NotificationHistoryCard({ logs }: NotificationHistoryCardProps) 
                   <div
                     key={log.id}
                     className={cn(
-                      "grid gap-4 rounded-[22px] border border-transparent bg-surface px-4 py-4 hover:border-border-soft hover:bg-surface-muted/55 md:grid-cols-[1fr_1.2fr_0.8fr_1fr] md:px-2 md:py-3",
+                      "grid gap-4 rounded-[22px] border border-transparent bg-surface px-4 py-4 hover:border-border-soft hover:bg-surface-muted/55 md:grid-cols-[1.2fr_1fr_1.2fr_0.8fr_1fr] md:px-2 md:py-3",
                       index === 0 ? "bg-surface-muted/45" : "",
                     )}
                   >
@@ -59,6 +61,13 @@ export function NotificationHistoryCard({ logs }: NotificationHistoryCardProps) 
                           {getNotificationTypeLabel(log.notificationType)}
                         </p>
                       </div>
+                    </div>
+
+                    <div>
+                      <p className="text-sm font-bold text-text-muted md:hidden">Kanal</p>
+                      <p className="text-lg font-bold tracking-[-0.03em] text-foreground">
+                        {getNotificationChannelLabel(log.channel)}
+                      </p>
                     </div>
 
                     <div>

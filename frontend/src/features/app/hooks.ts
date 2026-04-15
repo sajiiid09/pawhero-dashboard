@@ -41,6 +41,7 @@ export function useDashboardSummaryQuery() {
   return useQuery({
     queryKey: appQueryKeys.dashboard,
     queryFn: getDashboardSummary,
+    refetchInterval: 15_000,
   });
 }
 
@@ -212,6 +213,8 @@ export function useAcknowledgeCheckInMutation() {
         appQueryKeys.checkInStatus,
         appQueryKeys.checkInEvents,
         appQueryKeys.escalationHistory,
+        appQueryKeys.notifications,
+        appQueryKeys.emergencyProfileRoot,
       ]);
     },
   });
@@ -221,6 +224,7 @@ export function useCheckInEventsQuery() {
   return useQuery({
     queryKey: appQueryKeys.checkInEvents,
     queryFn: getCheckInEvents,
+    refetchInterval: 15_000,
   });
 }
 
@@ -228,6 +232,7 @@ export function useEscalationHistoryQuery() {
   return useQuery({
     queryKey: appQueryKeys.escalationHistory,
     queryFn: getEscalationHistory,
+    refetchInterval: 15_000,
   });
 }
 
@@ -235,6 +240,7 @@ export function useNotificationLogsQuery() {
   return useQuery({
     queryKey: appQueryKeys.notifications,
     queryFn: getNotificationLogs,
+    refetchInterval: 10_000,
   });
 }
 
@@ -243,6 +249,7 @@ export function useEmergencyProfileQuery(petId: string) {
     queryKey: appQueryKeys.emergencyProfile(petId),
     queryFn: () => getEmergencyProfile(petId),
     enabled: Boolean(petId),
+    refetchInterval: 15_000,
   });
 }
 
@@ -251,6 +258,7 @@ export function usePublicEmergencyProfileQuery(token: string) {
     queryKey: ["public-emergency-profile", token],
     queryFn: () => getPublicEmergencyProfile(token),
     enabled: Boolean(token),
+    refetchInterval: 15_000,
   });
 }
 

@@ -4,6 +4,8 @@ import {
   formatCheckInTime,
   formatRelativeCheckIn,
   getCheckInMethodLabel,
+  getNotificationChannelLabel,
+  getNotificationTypeLabel,
 } from "@/features/dashboard/view-model";
 
 describe("dashboard view-model", () => {
@@ -35,5 +37,15 @@ describe("dashboard view-model", () => {
     expect(formatCheckInTime(undefined, now)).toBe("Zeitpunkt unbekannt");
     expect(formatCheckInTime("", now)).toBe("Zeitpunkt unbekannt");
     expect(formatCheckInTime("not-a-date", now)).toBe("Zeitpunkt unbekannt");
+  });
+
+  it("maps notification labels for the flow history", () => {
+    expect(getNotificationTypeLabel("owner_reminder")).toBe("Check-In Erinnerung");
+    expect(getNotificationTypeLabel("owner_escalation")).toBe("Eskalation an Halter:in");
+    expect(getNotificationTypeLabel("emergency_contact_escalation")).toBe(
+      "Eskalation an Kontakt",
+    );
+    expect(getNotificationChannelLabel("push")).toBe("Push");
+    expect(getNotificationChannelLabel("email")).toBe("E-Mail");
   });
 });

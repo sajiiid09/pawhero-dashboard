@@ -17,8 +17,8 @@ function AuthProbe() {
 
 describe("AuthProvider auth-expired handling", () => {
   it("clears auth storage and state when auth-expired is dispatched", async () => {
-    localStorage.setItem("pawhero_token", "expired-token");
-    localStorage.setItem(
+    window.localStorage.setItem("pawhero_token", "expired-token");
+    window.localStorage.setItem(
       "pawhero_user",
       JSON.stringify({ ownerId: "owner-demo", email: "demo@pfoten-held.de", displayName: "Demo" }),
     );
@@ -39,8 +39,8 @@ describe("AuthProvider auth-expired handling", () => {
       expect(screen.getByText("logged-out")).toBeInTheDocument();
     });
 
-    expect(localStorage.getItem("pawhero_token")).toBeNull();
-    expect(localStorage.getItem("pawhero_user")).toBeNull();
-    expect(sessionStorage.getItem(LOGIN_REASON_STORAGE_KEY)).toBe(SESSION_EXPIRED_REASON);
+    expect(window.localStorage.getItem("pawhero_token")).toBeNull();
+    expect(window.localStorage.getItem("pawhero_user")).toBeNull();
+    expect(window.sessionStorage.getItem(LOGIN_REASON_STORAGE_KEY)).toBe(SESSION_EXPIRED_REASON);
   });
 });
