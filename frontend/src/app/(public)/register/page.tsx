@@ -2,6 +2,7 @@
 
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
+import { motion } from "framer-motion";
 import Link from "next/link";
 
 import { useRegisterMutation } from "@/features/auth/hooks";
@@ -26,18 +27,35 @@ export default function RegisterPage() {
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-slate-50 to-blue-50 px-4">
-      <div className="w-full max-w-sm rounded-2xl border border-white/60 bg-white/80 p-8 shadow-lg backdrop-blur-sm">
-        <div className="mb-6 text-center">
-          <h1 className="text-2xl font-bold text-slate-800">Pfoten-Held</h1>
-          <p className="mt-1 text-sm text-slate-500">Konto erstellen</p>
+    <div className="relative flex min-h-screen items-center justify-center overflow-y-auto overflow-x-hidden px-4 py-8">
+      {/* Pet Background Image with Overlay */}
+      <div 
+        className="fixed inset-0 z-0 bg-[url('https://images.unsplash.com/photo-1699693989048-2ea153131283?q=80&w=2021&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D')] bg-cover bg-center"
+        aria-hidden="true"
+      />
+      {/* Dark gradient overlay for readability and glassmorphism contrast */}
+      <div className="fixed inset-0 z-0 bg-slate-950/60 backdrop-blur-[2px]" />
+
+      <motion.div 
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.6, ease: "easeOut" }}
+        className="relative z-10 w-full max-w-sm rounded-[32px] border border-white/20 bg-white/10 p-8 shadow-[0_8px_32px_0_rgba(0,0,0,0.3)] backdrop-blur-xl"
+      >
+        <div className="mb-8 text-center">
+          <h1 className="text-3xl font-extrabold tracking-tight text-white drop-shadow-sm">
+            Pfoten-Held
+          </h1>
+          <p className="mt-2 text-sm font-medium text-white/70">
+            Erstellen Sie Ihr neues Konto.
+          </p>
         </div>
 
-        <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-          <div>
+        <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
+          <div className="space-y-1.5">
             <label
               htmlFor="displayName"
-              className="block text-sm font-medium text-slate-700"
+              className="block pl-1 text-sm font-medium text-white/80"
             >
               Name
             </label>
@@ -46,19 +64,20 @@ export default function RegisterPage() {
               type="text"
               autoComplete="name"
               {...register("displayName")}
-              className="mt-1 block w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+              className="block w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white placeholder-white/30 outline-none transition-all focus:border-white/30 focus:bg-white/10 focus:ring-2 focus:ring-white/20"
+              placeholder="Max Mustermann"
             />
             {errors.displayName && (
-              <p className="mt-1 text-xs text-red-500">
+              <p className="pl-1 text-xs font-medium text-red-400">
                 {errors.displayName.message}
               </p>
             )}
           </div>
 
-          <div>
+          <div className="space-y-1.5">
             <label
               htmlFor="email"
-              className="block text-sm font-medium text-slate-700"
+              className="block pl-1 text-sm font-medium text-white/80"
             >
               E-Mail
             </label>
@@ -67,19 +86,20 @@ export default function RegisterPage() {
               type="email"
               autoComplete="email"
               {...register("email")}
-              className="mt-1 block w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+              className="block w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white placeholder-white/30 outline-none transition-all focus:border-white/30 focus:bg-white/10 focus:ring-2 focus:ring-white/20"
+              placeholder="mail@beispiel.de"
             />
             {errors.email && (
-              <p className="mt-1 text-xs text-red-500">
+              <p className="pl-1 text-xs font-medium text-red-400">
                 {errors.email.message}
               </p>
             )}
           </div>
 
-          <div>
+          <div className="space-y-1.5">
             <label
               htmlFor="password"
-              className="block text-sm font-medium text-slate-700"
+              className="block pl-1 text-sm font-medium text-white/80"
             >
               Passwort
             </label>
@@ -88,42 +108,47 @@ export default function RegisterPage() {
               type="password"
               autoComplete="new-password"
               {...register("password")}
-              className="mt-1 block w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+              className="block w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white placeholder-white/30 outline-none transition-all focus:border-white/30 focus:bg-white/10 focus:ring-2 focus:ring-white/20"
+              placeholder="••••••••"
             />
             {errors.password && (
-              <p className="mt-1 text-xs text-red-500">
+              <p className="pl-1 text-xs font-medium text-red-400">
                 {errors.password.message}
               </p>
             )}
           </div>
 
           {registerMutation.error && (
-            <p className="text-sm text-red-600">
+            <p className="pl-1 text-sm font-medium text-red-400">
               {registerMutation.error.message}
             </p>
           )}
 
-          <button
-            type="submit"
-            disabled={registerMutation.isPending}
-            className="w-full rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50"
-          >
-            {registerMutation.isPending
-              ? "Wird erstellt..."
-              : "Konto erstellen"}
-          </button>
+          <div className="pt-2">
+            <button
+              type="submit"
+              disabled={registerMutation.isPending}
+              className="group relative w-full overflow-hidden rounded-2xl border border-white/20 bg-white/10 px-4 py-3.5 text-sm font-semibold text-white shadow-lg backdrop-blur-md transition-all duration-300 hover:bg-white/20 hover:shadow-[0_0_20px_rgba(255,255,255,0.1)] focus:outline-none focus:ring-2 focus:ring-white/50 focus:ring-offset-2 focus:ring-offset-slate-900 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <span className="relative z-10">
+                {registerMutation.isPending
+                  ? "Wird erstellt..."
+                  : "Konto erstellen"}
+              </span>
+            </button>
+          </div>
         </form>
 
-        <p className="mt-6 text-center text-sm text-slate-500">
+        <p className="mt-8 text-center text-sm text-white/60">
           Bereits registriert?{" "}
           <Link
             href="/login"
-            className="font-medium text-blue-600 hover:text-blue-700"
+            className="font-semibold text-white/90 transition-colors hover:text-white"
           >
             Anmelden
           </Link>
         </p>
-      </div>
+      </motion.div>
     </div>
   );
 }
