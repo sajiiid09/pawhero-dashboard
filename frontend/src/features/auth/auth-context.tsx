@@ -29,14 +29,16 @@ const AUTH_STORAGE_EVENT = "pawhero-auth-storage";
 export const LOGIN_REASON_STORAGE_KEY = "pawhero_login_reason";
 export const SESSION_EXPIRED_REASON = "session-expired";
 
-let cachedAuthSnapshot: { token: string | null; user: AuthUser | null } = {
+const NULL_AUTH_SNAPSHOT: { token: string | null; user: AuthUser | null } = {
   token: null,
   user: null,
 };
 
+let cachedAuthSnapshot: { token: string | null; user: AuthUser | null } = NULL_AUTH_SNAPSHOT;
+
 function loadStoredAuth(): { token: string | null; user: AuthUser | null } {
   if (typeof window === "undefined") {
-    return { token: null, user: null };
+    return NULL_AUTH_SNAPSHOT;
   }
   try {
     const token = localStorage.getItem(TOKEN_KEY);
@@ -63,7 +65,7 @@ function loadStoredAuth(): { token: string | null; user: AuthUser | null } {
     return cachedAuthSnapshot;
   }
 
-  cachedAuthSnapshot = { token: null, user: null };
+  cachedAuthSnapshot = NULL_AUTH_SNAPSHOT;
   setAuthToken(null);
   return cachedAuthSnapshot;
 }
@@ -98,7 +100,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const authState = useSyncExternalStore(
     subscribeToAuthStorage,
     loadStoredAuth,
-    () => ({ token: null, user: null }),
+    () => NULL_AUTH_SNAPSHOT,
   );
   const { token, user } = authState;
 
