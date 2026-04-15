@@ -15,8 +15,17 @@ const timeFormatter = new Intl.DateTimeFormat("de-DE", {
   minute: "2-digit",
 });
 
-export function formatCheckInTime(isoString: string, now = new Date()) {
+export function formatCheckInTime(isoString: string | null | undefined, now = new Date()) {
+  if (!isoString) {
+    return "Zeitpunkt unbekannt";
+  }
+
   const value = new Date(isoString);
+
+  if (Number.isNaN(value.getTime())) {
+    return "Zeitpunkt unbekannt";
+  }
+
   const differenceInDays = startOfDay(value).getTime() - startOfDay(now).getTime();
 
   if (differenceInDays === 0) {

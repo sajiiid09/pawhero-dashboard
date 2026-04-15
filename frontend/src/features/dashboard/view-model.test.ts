@@ -28,4 +28,12 @@ describe("dashboard view-model", () => {
     expect(getCheckInMethodLabel("push")).toBe("Push-Nachricht");
     expect(getCheckInMethodLabel("webapp")).toBe("Web-App");
   });
+
+  it("handles missing or invalid timestamps safely", () => {
+    const now = new Date("2026-04-15T12:00:00+06:00");
+
+    expect(formatCheckInTime(undefined, now)).toBe("Zeitpunkt unbekannt");
+    expect(formatCheckInTime("", now)).toBe("Zeitpunkt unbekannt");
+    expect(formatCheckInTime("not-a-date", now)).toBe("Zeitpunkt unbekannt");
+  });
 });

@@ -4,10 +4,12 @@ import {
   createContext,
   useCallback,
   useContext,
+  useEffect,
   useState,
   type ReactNode,
 } from "react";
 
+import { AUTH_EXPIRED_EVENT } from "@/lib/api-client";
 import type { AuthUser } from "./types";
 
 interface AuthContextValue {
@@ -22,6 +24,8 @@ const AuthContext = createContext<AuthContextValue | null>(null);
 
 const TOKEN_KEY = "pawhero_token";
 const USER_KEY = "pawhero_user";
+export const LOGIN_REASON_STORAGE_KEY = "pawhero_login_reason";
+export const SESSION_EXPIRED_REASON = "session-expired";
 
 function loadStoredAuth(): { token: string | null; user: AuthUser | null } {
   if (typeof window === "undefined") {
@@ -56,6 +60,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setToken(null);
     setUser(null);
   }, []);
+
+  useEffect(() => {
+    const handleAuthExpired = () => {
+      try {
+        sessionStorage.setItem(LOGIN_REASON_STORAGE_KEY, SESSION_EXPIRED_REASON);
+      } catch {
+        // Ignore storage write failures and still force logout.
+      }
+      logout();
+    };
+
+    window.addEventListener(AUTH_EXPIRED_EVENT, handleAuthExpired);
+    return () => {
+      window.removeEventListener(AUTH_EXPIRED_EVENT, handleAuthExpired);
+    };
+  }, [logout]);
 
   return (
     <AuthContext.Provider

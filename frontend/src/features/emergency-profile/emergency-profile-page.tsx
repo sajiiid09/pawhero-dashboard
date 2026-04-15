@@ -19,6 +19,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useHydrated } from "@/lib/use-hydrated";
+import { ApiError } from "@/lib/api-client";
 import {
   useEmergencyProfileQuery,
   usePublicEmergencyProfileQuery,
@@ -49,15 +50,30 @@ export function EmergencyProfilePage({
   }
 
   if (!profile) {
+    const isUnauthorized =
+      error instanceof ApiError && (error.status === 401 || error.status === 403);
+
+    const errorTitle = isUnauthorized
+      ? token
+        ? "Freigabe-Link abgelaufen"
+        : "Sitzung abgelaufen"
+      : "Notfall-Profil nicht gefunden";
+
+    const errorMessage = isUnauthorized
+      ? token
+        ? "Der Freigabe-Link ist abgelaufen oder ungueltig. Bitte fordern Sie einen neuen Link an."
+        : "Ihre Sitzung ist abgelaufen. Bitte melden Sie sich erneut an."
+      : error instanceof Error
+        ? error.message
+        : "Das angeforderte Profil ist nicht verfuegbar.";
+
     return (
       <div className="mx-auto max-w-4xl rounded-[30px] border border-danger/20 bg-white p-10">
         <p className="text-2xl font-extrabold tracking-[-0.05em] text-foreground">
-          Notfall-Profil nicht gefunden
+          {errorTitle}
         </p>
         <p className="mt-2 text-sm leading-7 text-text-muted">
-          {error instanceof Error
-            ? error.message
-            : "Das angeforderte Profil ist nicht verfuegbar."}
+          {errorMessage}
         </p>
       </div>
     );

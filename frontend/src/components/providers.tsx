@@ -4,8 +4,17 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { useState } from "react";
 
 import { setAuthToken } from "@/lib/api-client";
+import { ApiError } from "@/lib/api-client";
 import { AuthProvider, useAuth } from "@/features/auth/auth-context";
 import { useEffect } from "react";
+
+export function shouldRetryQuery(failureCount: number, error: unknown) {
+  if (error instanceof ApiError && error.status === 401) {
+    return false;
+  }
+
+  return failureCount < 3;
+}
 
 function TokenSync({ children }: { children: React.ReactNode }) {
   const { token } = useAuth();
@@ -25,6 +34,7 @@ export function AppProviders({ children }: { children: React.ReactNode }) {
           queries: {
             staleTime: 10_000,
             refetchOnWindowFocus: false,
+            retry: shouldRetryQuery,
           },
         },
       }),

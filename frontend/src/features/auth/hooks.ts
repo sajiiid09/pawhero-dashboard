@@ -4,7 +4,7 @@ import { useMutation } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 
 import { loginUser, registerUser } from "./api";
-import { useAuth } from "./auth-context";
+import { LOGIN_REASON_STORAGE_KEY, useAuth } from "./auth-context";
 import type { LoginInput, RegisterInput } from "./types";
 
 export function useLoginMutation() {
@@ -19,6 +19,11 @@ export function useLoginMutation() {
         displayName: data.display_name,
         email: "",
       });
+      try {
+        sessionStorage.removeItem(LOGIN_REASON_STORAGE_KEY);
+      } catch {
+        // Ignore storage failures and continue navigation.
+      }
       router.push("/dashboard");
     },
   });

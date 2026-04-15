@@ -1,4 +1,8 @@
 from fastapi import status
+from uuid import uuid4
+
+from app.db.models import NotificationLog
+from app.db.session import get_session_factory
 
 
 def test_healthcheck(client):
@@ -240,3 +244,40 @@ def test_dashboard_escalation_status_is_dynamic(client, auth_headers):
     escalation = response.json()["escalationStatus"]
     assert escalation["mode"] == "normal"
     assert escalation["title"] == "Normalbetrieb"
+
+
+def test_notifications_response_uses_camel_case(client, auth_headers):
+    log_id = f"notif-{uuid4().hex[:8]}"
+    session = get_session_factory()()
+
+    try:
+        session.add(
+            NotificationLog(
+                id=log_id,
+                owner_id="owner-demo",
+                escalation_event_id=None,
+                recipient_email="demo+notif@pfoten-held.de",
+                notification_type="reminder",
+                status="sent",
+                error_message=None,
+            )
+        )
+        session.commit()
+    finally:
+        session.close()
+
+    response = client.get("/notifications", headers=auth_headers)
+
+    assert response.status_code == status.HTTP_200_OK
+    payload = response.json()
+    item = next((entry for entry in payload if entry["id"] == log_id), None)
+
+    assert item is not None
+    assert item["recipientEmail"] == "demo+notif@pfoten-held.de"
+    assert item["notificationType"] == "reminder"
+    assert item["errorMessage"] is None
+    assert item["createdAt"]
+    assert "recipient_email" not in item
+    assert "notification_type" not in item
+    assert "error_message" not in item
+    assert "created_at" not in item

@@ -8,11 +8,17 @@ export class ApiError extends Error {
   }
 }
 
+export const AUTH_EXPIRED_EVENT = "pawhero:auth-expired";
+
 const fallbackApiBaseUrl = "http://localhost:8000";
 
 let authToken: string | null = null;
+let authExpiredSignalDispatched = false;
 
 export function setAuthToken(token: string | null) {
+  if (authToken !== token) {
+    authExpiredSignalDispatched = false;
+  }
   authToken = token;
 }
 
@@ -43,6 +49,16 @@ export async function apiRequest<T>(
   });
 
   if (!response.ok) {
+    if (
+      response.status === 401 &&
+      authToken &&
+      !authExpiredSignalDispatched &&
+      typeof window !== "undefined"
+    ) {
+      authExpiredSignalDispatched = true;
+      window.dispatchEvent(new Event(AUTH_EXPIRED_EVENT));
+    }
+
     let message = "Die Anfrage konnte nicht verarbeitet werden.";
 
     try {
