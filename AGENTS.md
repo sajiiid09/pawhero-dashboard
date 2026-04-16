@@ -137,11 +137,12 @@ Backend tests (`conftest.py`) create a **temporary PostgreSQL database** per ses
 ### Backend
 - **Scheduler**: APScheduler `BackgroundScheduler` in `app/services/scheduler.py`, runs every 60s, starts/stops with FastAPI lifespan
 - **Dispatcher** (`app/services/notification_dispatcher.py`):
-  - PENDING state → sends reminder email to owner (once per cycle, dedup via NotificationLog)
-  - ESCALATED state → notifies emergency contacts sequentially in priority order (5-min gap between contacts)
+  - PENDING state → creates a simulated owner push log and sends owner reminder email in the same cycle
+  - ESCALATED state → creates/uses active escalation, emails owner immediately, then emails emergency contacts sequentially in priority order (5-min gap)
+  - Contact escalation emails must contain the public responder link (`/s/{token}`)
 - **Email service** (`app/services/email.py`): SMTP via Python stdlib (`smtplib`), plain text emails, German templates
-- **NotificationLog model** in `app/db/models.py` — id, owner_id, escalation_event_id, recipient_email, notification_type (reminder/escalation_alert), status (sent/failed), error_message
-- **Migration**: `alembic/versions/0004_notification_logs.py`
+- **NotificationLog model** in `app/db/models.py` — includes `channel` (`push` or `email`) plus semantic types (`owner_reminder`, `owner_escalation`, `emergency_contact_escalation`, `responder_acknowledgment`)
+- **Migrations**: `0004_notification_logs.py`, `0007_notification_channels.py`
 - **Repository**: `app/repositories/notification.py` — dedup queries, log creation, list history
 - **Endpoint**: `GET /notifications` — notification logs for authenticated owner (newest first, limit 50)
 - **Config**: SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASSWORD, SMTP_FROM, APP_URL env vars
@@ -150,8 +151,9 @@ Backend tests (`conftest.py`) create a **temporary PostgreSQL database** per ses
 - **Type**: `NotificationLogItem` in `dashboard/types.ts`
 - **Query key**: `notifications` in `query-keys.ts`
 - **Hook**: `useNotificationLogsQuery` in `hooks.ts`
-- **Component**: `NotificationHistoryCard` in `check-in/components/notification-history-card.tsx`
+- **Component**: `NotificationHistoryCard` shows both type and channel so simulated push and email are distinguishable
 - **Check-in page**: notification history section below escalation history
+- **Polling**: dashboard, notification history, escalation history, and emergency profiles refetch periodically for demo visibility
 
 ## Emergency Contact Experience (Phase 7)
 
@@ -168,3 +170,8 @@ Backend tests (`conftest.py`) create a **temporary PostgreSQL database** per ses
 - **Escalation banner**: shown on public profile when escalation is active, shows minutes since escalation + acknowledgment count
 - **"Ich kümmere mich" action**: form for responders to acknowledge (email + optional name), calls POST endpoint, shows confirmation
 - **Mobile responsive**: responsive font sizes, larger touch targets, responsive header layout
+
+## Documentation Discipline
+
+- Keep `AGENTS.md` and `DEVELOPMENT.md` concise and current after each phase.
+- Final execution reports should summarize outcomes and verification, not file inventories.

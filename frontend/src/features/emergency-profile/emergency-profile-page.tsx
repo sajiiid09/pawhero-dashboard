@@ -343,7 +343,7 @@ function EscalationBanner({
         </div>
         <div>
           <p className="text-lg font-extrabold tracking-[-0.03em] text-danger">
-            NOTFALL: Eigentmer reagiert seit {minutesAgo} Minuten nicht
+            NOTFALL: Eigentuemer reagiert seit {minutesAgo} Minuten nicht
           </p>
           {escalationContext.acknowledgmentCount > 0 ? (
             <p className="mt-1 text-sm font-semibold text-text-muted">
@@ -401,12 +401,12 @@ function ResponderAction({ token }: { token: string }) {
 
       {submitted ? (
         <p className="mt-4 text-sm font-semibold leading-7 text-success">
-          Vielen Dank. Der Eigentmer wurde benachrichtigt, dass Sie helfen.
+          Vielen Dank. Der Eigentuemer wurde benachrichtigt, dass Sie helfen.
         </p>
       ) : (
         <form onSubmit={handleSubmit} className="mt-4 space-y-3">
           <p className="text-sm leading-7 text-text-muted">
-            Bestätigen Sie, dass Sie sich um das Tier kuemmern. Der Eigentmer
+            Bestaetigen Sie, dass Sie sich um das Tier kuemmern. Der Eigentuemer
             wird per E-Mail benachrichtigt.
           </p>
           <input

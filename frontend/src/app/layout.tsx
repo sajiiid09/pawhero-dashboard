@@ -20,8 +20,12 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="de" className={`${manrope.variable} h-full antialiased`}>
-      <body className="min-h-full font-sans text-foreground">
+    <html
+      lang="de"
+      className={`${manrope.variable} h-full antialiased`}
+      suppressHydrationWarning
+    >
+      <body className="min-h-full font-sans text-foreground" suppressHydrationWarning>
         <AppProviders>{children}</AppProviders>
       </body>
     </html>

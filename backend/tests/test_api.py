@@ -2,7 +2,7 @@ from uuid import uuid4
 
 from fastapi import status
 
-from app.db.models import NotificationLog, Owner
+from app.db.models import NotificationChannel, NotificationLog, NotificationType, Owner
 from app.db.session import get_session_factory
 from app.services.auth import create_access_token, hash_password
 
@@ -98,7 +98,7 @@ def test_emergency_contact_crud_and_reorder(client, auth_headers):
         json={"direction": "up"},
     )
     assert move_response.status_code == status.HTTP_200_OK
-    assert move_response.json()[1]["id"] == created_contact["id"]
+    assert move_response.json()[0]["id"] == created_contact["id"]
 
     delete_response = client.delete(
         f"/emergency-chain/contacts/{created_contact['id']}",
@@ -234,7 +234,7 @@ def test_auth_register_verify_and_login(client, monkeypatch):
 
 def test_unauthenticated_requests_return_401(client):
     response = client.get("/dashboard/summary")
-    assert response.status_code == status.HTTP_403_FORBIDDEN
+    assert response.status_code == status.HTTP_401_UNAUTHORIZED
 
 
 def test_public_emergency_profile(client):
@@ -344,7 +344,8 @@ def test_notifications_response_uses_camel_case(client, auth_headers):
                 owner_id="owner-demo",
                 escalation_event_id=None,
                 recipient_email="demo+notif@pfoten-held.de",
-                notification_type="reminder",
+                channel=NotificationChannel.EMAIL,
+                notification_type=NotificationType.OWNER_REMINDER,
                 status="sent",
                 error_message=None,
             )
@@ -361,10 +362,12 @@ def test_notifications_response_uses_camel_case(client, auth_headers):
 
     assert item is not None
     assert item["recipientEmail"] == "demo+notif@pfoten-held.de"
-    assert item["notificationType"] == "reminder"
+    assert item["channel"] == "email"
+    assert item["notificationType"] == "owner_reminder"
     assert item["errorMessage"] is None
     assert item["createdAt"]
     assert "recipient_email" not in item
+    assert "channel" in item
     assert "notification_type" not in item
     assert "error_message" not in item
     assert "created_at" not in item

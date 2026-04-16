@@ -4,35 +4,40 @@ from sqlalchemy.orm import Session
 from app.db.models import NotificationLog
 
 
-def find_reminder_for_cycle(
+def find_notification_for_cycle(
     session: Session,
     owner_id: str,
     cycle_start_iso: str,
+    notification_type: str,
+    channel: str,
 ) -> NotificationLog | None:
-    """Check if a reminder was already sent for this overdue cycle."""
+    """Check if a notification was already sent for this overdue cycle."""
     from datetime import datetime
 
     cycle_start = datetime.fromisoformat(cycle_start_iso)
     statement: Select[tuple[NotificationLog]] = select(NotificationLog).where(
         NotificationLog.owner_id == owner_id,
-        NotificationLog.notification_type == "reminder",
+        NotificationLog.notification_type == notification_type,
+        NotificationLog.channel == channel,
         NotificationLog.created_at >= cycle_start,
     )
     return session.scalar(statement)
 
 
-def find_alerts_for_escalation(
+def find_notifications_for_escalation(
     session: Session,
     escalation_event_id: str,
+    *,
+    notification_type: str | None = None,
+    channel: str | None = None,
 ) -> list[NotificationLog]:
-    statement = (
-        select(NotificationLog)
-        .where(
-            NotificationLog.escalation_event_id == escalation_event_id,
-            NotificationLog.notification_type == "escalation_alert",
-        )
-        .order_by(NotificationLog.created_at)
-    )
+    filters = [NotificationLog.escalation_event_id == escalation_event_id]
+    if notification_type is not None:
+        filters.append(NotificationLog.notification_type == notification_type)
+    if channel is not None:
+        filters.append(NotificationLog.channel == channel)
+
+    statement = select(NotificationLog).where(*filters).order_by(NotificationLog.created_at)
     return list(session.scalars(statement))
 
 
@@ -41,6 +46,7 @@ def create_notification_log(
     log_id: str,
     owner_id: str,
     recipient_email: str,
+    channel: str,
     notification_type: str,
     status: str,
     escalation_event_id: str | None = None,
@@ -51,6 +57,7 @@ def create_notification_log(
         owner_id=owner_id,
         escalation_event_id=escalation_event_id,
         recipient_email=recipient_email,
+        channel=channel,
         notification_type=notification_type,
         status=status,
         error_message=error_message,

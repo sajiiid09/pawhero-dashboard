@@ -5,11 +5,12 @@ import {
   useCallback,
   useContext,
   useEffect,
-  useState,
+  useMemo,
+  useSyncExternalStore,
   type ReactNode,
 } from "react";
 
-import { AUTH_EXPIRED_EVENT } from "@/lib/api-client";
+import { AUTH_EXPIRED_EVENT, setAuthToken } from "@/lib/api-client";
 import type { AuthUser } from "./types";
 
 interface AuthContextValue {
@@ -24,41 +25,97 @@ const AuthContext = createContext<AuthContextValue | null>(null);
 
 const TOKEN_KEY = "pawhero_token";
 const USER_KEY = "pawhero_user";
+const AUTH_STORAGE_EVENT = "pawhero-auth-storage";
 export const LOGIN_REASON_STORAGE_KEY = "pawhero_login_reason";
 export const SESSION_EXPIRED_REASON = "session-expired";
 
+const NULL_AUTH_SNAPSHOT: { token: string | null; user: AuthUser | null } = {
+  token: null,
+  user: null,
+};
+
+let cachedAuthSnapshot: { token: string | null; user: AuthUser | null } = NULL_AUTH_SNAPSHOT;
+
 function loadStoredAuth(): { token: string | null; user: AuthUser | null } {
   if (typeof window === "undefined") {
-    return { token: null, user: null };
+    return NULL_AUTH_SNAPSHOT;
   }
   try {
     const token = localStorage.getItem(TOKEN_KEY);
     const userJson = localStorage.getItem(USER_KEY);
     if (token && userJson) {
-      return { token, user: JSON.parse(userJson) as AuthUser };
+      const parsedUser = JSON.parse(userJson) as AuthUser;
+      if (
+        cachedAuthSnapshot.token === token &&
+        JSON.stringify(cachedAuthSnapshot.user) === userJson
+      ) {
+        setAuthToken(cachedAuthSnapshot.token);
+        return cachedAuthSnapshot;
+      }
+
+      cachedAuthSnapshot = { token, user: parsedUser };
+      setAuthToken(cachedAuthSnapshot.token);
+      return cachedAuthSnapshot;
     }
   } catch {
     // Ignore corrupted stored data.
   }
-  return { token: null, user: null };
+  if (cachedAuthSnapshot.token === null && cachedAuthSnapshot.user === null) {
+    setAuthToken(null);
+    return cachedAuthSnapshot;
+  }
+
+  cachedAuthSnapshot = NULL_AUTH_SNAPSHOT;
+  setAuthToken(null);
+  return cachedAuthSnapshot;
+}
+
+function subscribeToAuthStorage(onStoreChange: () => void) {
+  if (typeof window === "undefined") {
+    return () => undefined;
+  }
+
+  const handleStorage = (event: StorageEvent) => {
+    if (event.key === null || event.key === TOKEN_KEY || event.key === USER_KEY) {
+      onStoreChange();
+    }
+  };
+
+  window.addEventListener("storage", handleStorage);
+  window.addEventListener(AUTH_STORAGE_EVENT, onStoreChange);
+
+  return () => {
+    window.removeEventListener("storage", handleStorage);
+    window.removeEventListener(AUTH_STORAGE_EVENT, onStoreChange);
+  };
+}
+
+function dispatchAuthStorageEvent() {
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new Event(AUTH_STORAGE_EVENT));
+  }
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [token, setToken] = useState<string | null>(() => loadStoredAuth().token);
-  const [user, setUser] = useState<AuthUser | null>(() => loadStoredAuth().user);
+  const authState = useSyncExternalStore(
+    subscribeToAuthStorage,
+    loadStoredAuth,
+    () => NULL_AUTH_SNAPSHOT,
+  );
+  const { token, user } = authState;
 
   const setAuth = useCallback((newToken: string, newUser: AuthUser) => {
     localStorage.setItem(TOKEN_KEY, newToken);
     localStorage.setItem(USER_KEY, JSON.stringify(newUser));
-    setToken(newToken);
-    setUser(newUser);
+    setAuthToken(newToken);
+    dispatchAuthStorageEvent();
   }, []);
 
   const logout = useCallback(() => {
     localStorage.removeItem(TOKEN_KEY);
     localStorage.removeItem(USER_KEY);
-    setToken(null);
-    setUser(null);
+    setAuthToken(null);
+    dispatchAuthStorageEvent();
   }, []);
 
   useEffect(() => {
@@ -77,19 +134,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
   }, [logout]);
 
-  return (
-    <AuthContext.Provider
-      value={{
-        user,
-        token,
-        isAuthenticated: Boolean(token && user),
-        setAuth,
-        logout,
-      }}
-    >
-      {children}
-    </AuthContext.Provider>
+  const value = useMemo(
+    () => ({
+      user,
+      token,
+      isAuthenticated: Boolean(token && user),
+      setAuth,
+      logout,
+    }),
+    [logout, setAuth, token, user],
   );
+
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
 
 export function useAuth(): AuthContextValue {

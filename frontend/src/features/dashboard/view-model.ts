@@ -141,9 +141,17 @@ export function formatDeadlineCountdown(
 }
 
 export function getNotificationTypeLabel(type: string) {
-  if (type === "reminder") return "Erinnerung";
-  if (type === "escalation_alert") return "Eskalationsalarm";
+  if (type === "owner_reminder") return "Check-In Erinnerung";
+  if (type === "owner_escalation") return "Eskalation an Halter:in";
+  if (type === "emergency_contact_escalation") return "Eskalation an Kontakt";
+  if (type === "responder_acknowledgment") return "Rueckmeldung von Kontakt";
   return type;
+}
+
+export function getNotificationChannelLabel(channel: string) {
+  if (channel === "push") return "Push";
+  if (channel === "email") return "E-Mail";
+  return channel;
 }
 
 export function getNotificationStatusLabel(status: string) {

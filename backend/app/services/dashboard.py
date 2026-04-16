@@ -2,7 +2,12 @@ from __future__ import annotations
 
 from sqlalchemy.orm import Session
 
-from app.repositories.check_in import get_check_in_config, list_recent_check_in_events
+from app.repositories import responder as responder_repo
+from app.repositories.check_in import (
+    get_active_escalation,
+    get_check_in_config,
+    list_recent_check_in_events,
+)
 from app.repositories.emergency_chain import list_ordered_contacts
 from app.repositories.pets import list_pets
 from app.schemas.dashboard import (
@@ -24,6 +29,16 @@ def build_dashboard_summary(session: Session, owner_id: str) -> DashboardSummary
 
     mode, deadline = compute_escalation_state(config)
     escalation_display = build_escalation_display(mode, deadline)
+    active_escalation = get_active_escalation(session, owner_id)
+    if active_escalation is not None:
+        acknowledgment_count = responder_repo.count_acknowledgments(session, active_escalation.id)
+        if acknowledgment_count > 0:
+            escalation_display["title"] = "Hilfe bestaetigt"
+            escalation_display["description"] = (
+                f"{acknowledgment_count} Kontaktperson"
+                + ("en haben " if acknowledgment_count != 1 else " hat ")
+                + "die Betreuung bestaetigt."
+            )
 
     return DashboardSummaryDTO.model_validate(
         {
