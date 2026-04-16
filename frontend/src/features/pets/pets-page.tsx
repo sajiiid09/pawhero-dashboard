@@ -18,6 +18,7 @@ export function PetsPage() {
   const { data: pets = [], error, isLoading } = usePetsQuery();
   const deletePetMutation = useDeletePetMutation();
   const [selectedPetId, setSelectedPetId] = useState<string | null>(null);
+  const petsGridClassName = pets.length > 1 ? "grid gap-4 xl:grid-cols-2" : "grid gap-4";
 
   return (
     <>
@@ -73,7 +74,7 @@ export function PetsPage() {
               }
             />
           ) : (
-            <div className="grid gap-4 xl:grid-cols-2">
+            <div className={petsGridClassName}>
               <AnimatePresence initial={false}>
                 {pets.map((pet) => (
                   <motion.article
@@ -84,8 +85,8 @@ export function PetsPage() {
                     exit={{ opacity: 0, y: -8 }}
                     className="surface-card rounded-[var(--radius-card)] border border-border-soft p-6 sm:p-7"
                   >
-                    <div className="flex items-start justify-between gap-4">
-                      <div className="flex items-start gap-4">
+                    <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+                      <div className="flex min-w-0 items-start gap-4">
                         <div className="flex h-16 w-16 items-center justify-center rounded-[22px] bg-primary-soft text-primary">
                           {pet.imageUrl ? (
                             // eslint-disable-next-line @next/next/no-img-element
@@ -98,8 +99,8 @@ export function PetsPage() {
                             <span className="text-2xl">🐾</span>
                           )}
                         </div>
-                        <div className="space-y-2">
-                          <h2 className="text-3xl font-extrabold tracking-[-0.05em] text-foreground">
+                        <div className="min-w-0 space-y-2">
+                          <h2 className="break-words text-2xl font-extrabold tracking-[-0.05em] text-foreground sm:text-3xl">
                             {pet.name}
                           </h2>
                           <p className="text-base font-semibold text-text-muted">
@@ -111,9 +112,9 @@ export function PetsPage() {
                           </div>
                         </div>
                       </div>
-                      <div className="flex gap-2">
-                        <Link href={`/pets/${pet.id}/edit`}>
-                          <Button variant="ghost" size="sm" className="gap-2">
+                      <div className="grid w-full grid-cols-1 gap-2 sm:grid-cols-2 md:flex md:w-auto">
+                        <Link href={`/pets/${pet.id}/edit`} className="md:inline-flex">
+                          <Button variant="ghost" size="sm" className="w-full gap-2 md:w-auto">
                             <Pencil className="h-4 w-4" />
                             Bearbeiten
                           </Button>
@@ -121,7 +122,7 @@ export function PetsPage() {
                         <Button
                           variant="ghost"
                           size="sm"
-                          className="gap-2 text-danger hover:bg-danger-soft hover:text-danger"
+                          className="w-full gap-2 text-danger hover:bg-danger-soft hover:text-danger md:w-auto"
                           onClick={() => setSelectedPetId(pet.id)}
                           disabled={deletePetMutation.isPending}
                         >
@@ -150,12 +151,14 @@ export function PetsPage() {
                       </div>
                     </div>
 
-                    <div className="mt-6 flex items-center justify-between gap-3">
-                      <p className="text-sm font-medium text-text-muted">
+                    <div className="mt-6 flex flex-wrap items-center justify-between gap-3">
+                      <p className="min-w-0 flex-1 text-sm font-medium text-text-muted">
                         Tierarzt: {pet.veterinarian.name}
                       </p>
-                      <Link href={`/emergency-profile/${pet.id}`}>
-                        <Button variant="secondary">Details ansehen</Button>
+                      <Link href={`/emergency-profile/${pet.id}`} className="w-full sm:w-auto">
+                        <Button variant="secondary" className="w-full sm:w-auto">
+                          Details ansehen
+                        </Button>
                       </Link>
                     </div>
                   </motion.article>
