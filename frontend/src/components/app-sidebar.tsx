@@ -1,7 +1,5 @@
 "use client";
 
-import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import {
   Clock3,
@@ -12,6 +10,9 @@ import {
   ShieldCheck,
   Siren,
 } from "lucide-react";
+import Image from "next/image";
+import Link from "next/link";
+import { usePathname, useRouter } from "next/navigation";
 
 import { useAuth } from "@/features/auth/auth-context";
 import { usePetsQuery } from "@/features/app/hooks";
@@ -75,9 +76,14 @@ export function AppSidebar() {
         {/* Brand / Logo Area */}
         <div className="flex items-center gap-3 px-6 pt-7 pb-6 sm:px-7">
           <div className="relative flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-white/5 ring-1 ring-white/10 shadow-[inset_0_1px_0_rgba(255,255,255,0.1)] transition-transform duration-300 hover:scale-105">
-            <span className="absolute left-3 top-2.5 h-2 w-2 rounded-full bg-primary/80 shadow-[0_0_8px_rgba(var(--primary),0.5)]" />
-            <span className="absolute left-5.5 top-4.5 h-2 w-2 rounded-full bg-primary/65" />
-            <span className="absolute left-7.5 top-7 h-2 w-2 rounded-full bg-primary/45" />
+            <Image
+              src="/logo.png"
+              alt="Pfoten-Held Logo"
+              width={32}
+              height={32}
+              className="h-10 w-10 object-cover"
+              priority
+            />
           </div>
           <div className="min-w-0">
             <p className="truncate text-[1.85rem] font-extrabold tracking-[-0.06em] text-white drop-shadow-sm">
