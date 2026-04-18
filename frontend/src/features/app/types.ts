@@ -113,3 +113,16 @@ export type TestPushResult = {
   successCount: number;
   failureCount: number;
 };
+
+export type PublicCheckInStatus = {
+  mode: string;
+  escalationDeadline: string | null;
+  nextCheckInAt: string;
+  ownerName: string;
+  acknowledged: boolean;
+};
+
+export type PublicCheckInAckResponse = {
+  success: boolean;
+  alreadyAcknowledged: boolean;
+};

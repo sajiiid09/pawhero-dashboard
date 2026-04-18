@@ -43,6 +43,7 @@ def build_reminder_email(
     app_url: str,
     *,
     include_push_note: bool = True,
+    check_in_url: str | None = None,
 ) -> tuple[str, str]:
     subject = "Pfoten-Held: Check-In erforderlich"
     push_note = (
@@ -51,10 +52,14 @@ def build_reminder_email(
         if include_push_note
         else ""
     )
+    check_in_link = ""
+    if check_in_url:
+        check_in_link = f"\nDirekt bestaetigen (ohne Anmeldung): {check_in_url}\n"
     body = (
         f"Hallo {owner_name},\n\n"
         "dein naechster Check-In ist faellig. "
-        "Bitte melde dich an und bestaetige jetzt, dass alles in Ordnung ist.\n\n"
+        "Bitte melde dich an und bestaetige jetzt, dass alles in Ordnung ist.\n"
+        f"{check_in_link}"
         f"{push_note}"
         f"Dashboard: {app_url}/dashboard\n\n"
         "Wenn du nicht rechtzeitig reagierst, wird deine Notfallkette benachrichtigt.\n\n"
@@ -68,13 +73,19 @@ def build_owner_escalation_email(
     pet_name: str,
     app_url: str,
     public_profile_url: str,
+    *,
+    check_in_url: str | None = None,
 ) -> tuple[str, str]:
     subject = f"Pfoten-Held: Eskalation fuer {pet_name} gestartet"
+    check_in_link = ""
+    if check_in_url:
+        check_in_link = f"\nSofort quittieren (ohne Anmeldung): {check_in_url}\n"
     body = (
         f"Hallo {owner_name},\n\n"
         f"dein Check-In fuer {pet_name} wurde nicht bestaetigt. "
-        "Die Notfallkette wurde gestartet.\n\n"
-        f"Dashboard: {app_url}/dashboard\n"
+        "Die Notfallkette wurde gestartet.\n"
+        f"{check_in_link}"
+        f"\nDashboard: {app_url}/dashboard\n"
         f"Oeffentliches Notfall-Profil: {public_profile_url}\n\n"
         "Bitte bestaetige deinen Status so schnell wie moeglich oder "
         "informiere deine Kontaktpersonen direkt.\n\n"

@@ -67,7 +67,7 @@ Backend tests (`conftest.py`) create a **temporary PostgreSQL database** per ses
   - All protected routes use `OwnerId` dependency (`app/api/dependencies.py`) which extracts owner_id from the Bearer token.
 - **Frontend**: Auth state in `src/features/auth/auth-context.tsx`. Token stored in localStorage, synced to `apiRequest()` via `setAuthToken()` in `api-client.ts`.
 - **Public emergency profiles**: Tokenized access via `GET /public/emergency-profile/{token}` — no auth required. Tokens are auto-generated per pet and accessible at `GET /pets/{petId}/emergency-access-token`.
-- **Route protection**: `(app)/layout.tsx` redirects to `/login` if not authenticated. `(public)/` routes (login, register, register verify OTP, `/s/[token]`) are accessible without auth.
+- **Route protection**: `(app)/layout.tsx` redirects to `/login` if not authenticated. `(public)/` routes (login, register, register verify OTP, `/s/[token]`, `/c/[token]`) are accessible without auth.
 - **Demo credentials**: `demo@pfoten-held.de` / `demo1234` (seeded by `app/db/seed.py`).
 
 ## Frontend Architecture
@@ -175,6 +175,32 @@ Backend tests (`conftest.py`) create a **temporary PostgreSQL database** per ses
 - **Push hooks**: `useVapidPublicKeyQuery`, `usePushSubscriptionsQuery`, `useSavePushSubscriptionMutation`, `useRevokePushSubscriptionMutation`, `useSendTestPushMutation`
 - **PushNotificationsCard** in `features/check-in/components/` — detects browser support, iOS Home Screen requirement, permission states; register/unsubscribe/test push flows
 - **Check-in page**: PushNotificationsCard replaces risk-profile card
+
+## Public Owner Check-In Link (Phase 4)
+
+### Backend
+- **CheckInActionToken model** in `app/db/models.py` — id, owner_id, cycle_scheduled_at, token_hash, expires_at, used_at, created_at; unique constraint on (owner_id, cycle_scheduled_at), index on token_hash
+- **CheckInMethod enum** extended with `PUBLIC_LINK = "public_link"`
+- **Migration**: `alembic/versions/0011_check_in_action_tokens.py`
+- **Token service** (`app/services/check_in_action_token.py`): `generate_action_token()` creates/reuses token per cycle, stores SHA-256 hash, returns raw token; `lookup_token()`, `is_token_expired()`, `mark_token_used()`; 24-hour expiry after cycle's `next_scheduled_at`
+- **Token repository** (`app/repositories/check_in_action_token.py`): find by hash, find by cycle, create, mark used
+- **Schemas** (`app/schemas/public_check_in.py`): `PublicCheckInStatusDTO` (mode, deadline, ownerName, acknowledged), `PublicCheckInAckResponse` (success, alreadyAcknowledged)
+- **Public endpoints** (`app/api/routes/public.py`):
+  - `GET /public/check-in/{token}` — status with owner name, acknowledged flag
+  - `POST /public/check-in/{token}/acknowledge` — acknowledge via public link (method=`"public_link"`), idempotent
+- **acknowledge_check_in()** now accepts optional `method` param (default `"webapp"`)
+- **Dispatcher updated**: `_send_pending_notifications` and `_send_escalation_alerts` generate action token per cycle, embed `{APP_URL}/c/{raw_token}` in email body and push URL
+- **Email templates updated**: `build_reminder_email()` and `build_owner_escalation_email()` accept `check_in_url` kwarg
+- **Acknowledgement behavior**: valid unused → acknowledge + mark used; already used → return alreadyAcknowledged; owner acknowledged via dashboard → detect + mark used + return alreadyAcknowledged; expired → 410 Gone; invalid → 404
+- **Tests**: `backend/tests/test_public_check_in.py` (12 tests: hashing, generation, lookup, expiry, usage, method param)
+
+### Frontend
+- **Route**: `src/app/(public)/c/[token]/page.tsx` — public check-in page
+- **Component**: `features/check-in/public-check-in-page.tsx` — status display, acknowledge action, already-acknowledged state, error/expired states
+- **Types**: `PublicCheckInStatus`, `PublicCheckInAckResponse` in types.ts
+- **API functions**: `getPublicCheckInStatus(token)`, `acknowledgePublicCheckIn(token)` in api.ts
+- **Hooks**: `usePublicCheckInStatusQuery`, `useAcknowledgePublicCheckInMutation` in hooks.ts
+- **Deadline countdown**: live 1-second countdown in deadline display via `useEffect` + `setInterval`
 
 ## Notification Engine (Phase 6)
 

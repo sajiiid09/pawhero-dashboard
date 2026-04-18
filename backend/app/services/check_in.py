@@ -119,7 +119,11 @@ def build_escalation_display(
     }
 
 
-def acknowledge_check_in(session: Session, owner_id: str) -> CheckInStatusDTO:
+def acknowledge_check_in(
+    session: Session,
+    owner_id: str,
+    method: str = "webapp",
+) -> CheckInStatusDTO:
     config = get_check_in_config(session, owner_id)
     if config is None:
         from fastapi import HTTPException, status
@@ -156,7 +160,7 @@ def acknowledge_check_in(session: Session, owner_id: str) -> CheckInStatusDTO:
         event_id=generate_id(),
         status="acknowledged",
         acknowledged_at=now,
-        method="webapp",
+        method=method,
     )
 
     # Reset the timer.

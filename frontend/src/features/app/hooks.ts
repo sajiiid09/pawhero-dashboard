@@ -10,6 +10,7 @@ import {
 
 import {
   acknowledgeCheckIn,
+  acknowledgePublicCheckIn,
   deleteEmergencyContact,
   deletePet,
   deletePetDocument,
@@ -22,6 +23,7 @@ import {
   getEmergencyProfile,
   getNotificationLogs,
   getPetDocumentDownloadUrl,
+  getPublicCheckInStatus,
   getPublicEmergencyProfile,
   getPushSubscriptions,
   getVapidPublicKey,
@@ -382,6 +384,20 @@ export function useRevokePushSubscriptionMutation() {
 export function useSendTestPushMutation() {
   return useMutation({
     mutationFn: sendTestPush,
+  });
+}
+
+export function usePublicCheckInStatusQuery(token: string) {
+  return useQuery({
+    queryKey: ["public-check-in-status", token],
+    queryFn: () => getPublicCheckInStatus(token),
+    enabled: Boolean(token),
+  });
+}
+
+export function useAcknowledgePublicCheckInMutation() {
+  return useMutation({
+    mutationFn: acknowledgePublicCheckIn,
   });
 }
 

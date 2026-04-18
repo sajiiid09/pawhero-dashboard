@@ -8,6 +8,8 @@ import type {
   Pet,
   PetDocumentItem,
   PetInput,
+  PublicCheckInAckResponse,
+  PublicCheckInStatus,
   PushSubscriptionInput,
   PushSubscriptionItem,
   TestPushResult,
@@ -205,4 +207,15 @@ export function revokePushSubscription(input: PushSubscriptionInput) {
 
 export function sendTestPush() {
   return apiRequest<TestPushResult>("/push/test", { method: "POST" });
+}
+
+export function getPublicCheckInStatus(token: string) {
+  return apiRequest<PublicCheckInStatus>(`/public/check-in/${token}`);
+}
+
+export function acknowledgePublicCheckIn(token: string) {
+  return apiRequest<PublicCheckInAckResponse>(
+    `/public/check-in/${token}/acknowledge`,
+    { method: "POST" },
+  );
 }

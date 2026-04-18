@@ -48,7 +48,7 @@ def update_check_in_config(
 
 @router.post("/check-in/acknowledge", response_model=CheckInStatusDTO)
 def acknowledge(session: DbSession, owner_id: OwnerId) -> CheckInStatusDTO:
-    result = acknowledge_check_in(session, owner_id)
+    result = acknowledge_check_in(session, owner_id, method="webapp")
     session.commit()
     return result
 

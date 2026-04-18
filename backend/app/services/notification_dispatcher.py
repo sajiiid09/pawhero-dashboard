@@ -20,6 +20,7 @@ from app.repositories.emergency_chain import list_ordered_contacts
 from app.repositories.pets import list_pets
 from app.services.auth import generate_id
 from app.services.check_in import EscalationMode, compute_escalation_state
+from app.services.check_in_action_token import generate_action_token
 from app.services.email import (
     build_emergency_contact_escalation_email,
     build_owner_escalation_email,
@@ -61,7 +62,17 @@ def _send_pending_notifications(session: Session, config: CheckInConfig) -> None
         return
 
     cycle_key = config.next_scheduled_at.isoformat()
+    settings = get_settings()
     did_change = False
+
+    # Generate the action token once for this cycle so both push and email
+    # reference the same token.  Must happen before any notification is sent.
+    check_in_url: str | None = None
+    try:
+        raw_token = generate_action_token(session, config)
+        check_in_url = f"{settings.app_url}/c/{raw_token}"
+    except Exception:
+        logger.exception("failed to generate check-in action token owner_id=%s", config.owner_id)
 
     if (
         config.push_enabled
@@ -74,13 +85,13 @@ def _send_pending_notifications(session: Session, config: CheckInConfig) -> None
         )
         is None
     ):
-        settings = get_settings()
+        push_url = f"/c/{raw_token}" if check_in_url else "/check-in"
         push_result = send_push_to_owner(
             session,
             config.owner_id,
             title="Check-In erforderlich",
             body="Bitte bestaetige jetzt, dass alles in Ordnung ist.",
-            url="/check-in",
+            url=push_url,
         )
         push_status = "sent" if push_result.success_count > 0 else "failed"
         push_error = (
@@ -110,11 +121,11 @@ def _send_pending_notifications(session: Session, config: CheckInConfig) -> None
         )
         is None
     ):
-        settings = get_settings()
         subject, body = build_reminder_email(
             owner.display_name,
             settings.app_url,
             include_push_note=config.push_enabled,
+            check_in_url=check_in_url,
         )
         _send_email_notification(
             session,
@@ -146,6 +157,15 @@ def _send_escalation_alerts(
     public_profile_url = _get_public_profile_url(session, primary_pet, settings.app_url)
     did_change = False
 
+    # Generate check-in action token for the escalation cycle.
+    check_in_url: str | None = None
+    raw_token: str | None = None
+    try:
+        raw_token = generate_action_token(session, config)
+        check_in_url = f"{settings.app_url}/c/{raw_token}"
+    except Exception:
+        logger.exception("failed to generate check-in action token owner_id=%s", config.owner_id)
+
     if primary_pet is not None and public_profile_url is not None:
         owner_alerts = notification_repo.find_notifications_for_escalation(
             session,
@@ -159,6 +179,7 @@ def _send_escalation_alerts(
                 pet_name=primary_pet.name,
                 app_url=settings.app_url,
                 public_profile_url=public_profile_url,
+                check_in_url=check_in_url,
             )
             _send_email_notification(
                 session,
@@ -173,6 +194,7 @@ def _send_escalation_alerts(
             did_change = True
 
             if config.push_enabled:
+                push_url = f"/c/{raw_token}" if raw_token else "/dashboard"
                 push_result = send_push_to_owner(
                     session,
                     config.owner_id,
@@ -180,7 +202,7 @@ def _send_escalation_alerts(
                     body=(
                         f"Check-In fuer {primary_pet.name} wurde verpasst. Notfallkette gestartet."
                     ),
-                    url="/dashboard",
+                    url=push_url,
                 )
                 push_status = "sent" if push_result.success_count > 0 else "failed"
                 _log_notification(

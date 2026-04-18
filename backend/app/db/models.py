@@ -25,6 +25,7 @@ class CheckInMethod(StrEnum):
     PUSH = "push"
     EMAIL = "email"
     WEBAPP = "webapp"
+    PUBLIC_LINK = "public_link"
 
 
 class NotificationChannel(StrEnum):
@@ -97,6 +98,10 @@ class Owner(Base):
         cascade="all, delete-orphan",
     )
     push_subscriptions: Mapped[list[PushSubscription]] = relationship(
+        back_populates="owner",
+        cascade="all, delete-orphan",
+    )
+    check_in_action_tokens: Mapped[list[CheckInActionToken]] = relationship(
         back_populates="owner",
         cascade="all, delete-orphan",
     )
@@ -285,6 +290,25 @@ class PetDocument(TimestampMixin, Base):
 
     owner: Mapped[Owner] = relationship(back_populates="pet_documents")
     pet: Mapped[Pet] = relationship(back_populates="documents")
+
+
+class CheckInActionToken(TimestampMixin, Base):
+    __tablename__ = "check_in_action_tokens"
+    __table_args__ = (
+        UniqueConstraint("owner_id", "cycle_scheduled_at", name="uq_check_in_token_cycle"),
+        Index("ix_check_in_token_hash", "token_hash"),
+    )
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    owner_id: Mapped[str] = mapped_column(
+        ForeignKey("owners.id", ondelete="CASCADE"), nullable=False
+    )
+    cycle_scheduled_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    token_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    owner: Mapped[Owner] = relationship(back_populates="check_in_action_tokens")
 
 
 class PushSubscription(TimestampMixin, Base):
