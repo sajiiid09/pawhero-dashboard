@@ -55,8 +55,14 @@ def seed_demo_data() -> None:
                     insurance="Uelzener Tierkrankenversicherung",
                     veterinarian_name="Dr. Hans Mueller",
                     veterinarian_phone="+49 30 8899 2200",
-                    feeding_notes="Morgens Trockenfutter, abends Nassfutter. Leckerlis beruhigen bei Stress.",
-                    special_needs="Sehr nervoes bei lauten Geraeuschen. Ruhig ansprechen und langsam naehern.",
+                    feeding_notes=(
+                        "Morgens Trockenfutter, abends Nassfutter. "
+                        "Leckerlis beruhigen bei Stress."
+                    ),
+                    special_needs=(
+                        "Sehr nervoes bei lauten Geraeuschen. "
+                        "Ruhig ansprechen und langsam naehern."
+                    ),
                     spare_key_location="Ersatzschluessel im Schluesseltresor im Kellerabteil.",
                     created_at=now - timedelta(hours=1),
                 ),

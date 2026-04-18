@@ -1,3 +1,5 @@
+# Development/demo compose only. Production should run migrations as a release step,
+# must not auto-seed, and must run the scheduler in exactly one backend process.
 services:
   postgres:
     image: postgres:17
@@ -28,8 +30,10 @@ services:
       - ./backend/.env
     environment:
       DATABASE_URL: postgresql+psycopg://postgres:postgres@postgres:5432/pawhero
-      CORS_ORIGINS: '["http://localhost:3000","http://127.0.0.1:3000","http://10.146.30.126:3000"]'
-      APP_URL: http://10.146.30.126:3000
+      CORS_ORIGINS: '["http://localhost:3000","http://127.0.0.1:3000"]'
+      APP_URL: http://localhost:3000
+      DB_POOL_MODE: session
+      SCHEDULER_ENABLED: "true"
     ports:
       - "8000:8000"
     command: >
@@ -45,8 +49,8 @@ services:
       backend:
         condition: service_started
     environment:
-      NEXT_PUBLIC_API_BASE_URL: http://10.146.30.126:8000
-      NEXT_PUBLIC_APP_URL: http://10.146.30.126:3000
+      NEXT_PUBLIC_API_BASE_URL: http://localhost:8000
+      NEXT_PUBLIC_APP_URL: http://localhost:3000
       CI: "true"
     ports:
       - "3000:3000"

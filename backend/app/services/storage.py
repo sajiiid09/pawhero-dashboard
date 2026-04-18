@@ -24,6 +24,7 @@ MAX_DOCUMENT_BYTES = 10 * 1024 * 1024  # 10 MB
 
 IMAGES_BUCKET = "pet-images"
 DOCUMENTS_BUCKET = "pet-documents"
+DOCUMENT_SIGNED_URL_EXPIRES_SEC = 900
 
 
 def _get_client() -> Client:
@@ -104,12 +105,15 @@ def delete_document(storage_key: str) -> None:
     _delete_from_bucket(DOCUMENTS_BUCKET, storage_key)
 
 
-def create_download_url(storage_key: str, expires_sec: int = 3600) -> str:
+def create_download_url(
+    storage_key: str,
+    expires_sec: int = DOCUMENT_SIGNED_URL_EXPIRES_SEC,
+) -> str:
     """Create a signed URL for downloading a private document."""
     client = _get_client()
     response = client.storage.from_(DOCUMENTS_BUCKET).create_signed_url(storage_key, expires_sec)
     signed_url: str = response.get("signedURL", "") if isinstance(response, dict) else str(response)
-    logger.info("Created signed URL for %s (expires in %ds)", storage_key, expires_sec)
+    logger.info("Created signed document URL (expires in %ds)", expires_sec)
     return signed_url
 
 

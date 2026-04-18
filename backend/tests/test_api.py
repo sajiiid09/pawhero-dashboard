@@ -11,7 +11,7 @@ def test_healthcheck(client):
     response = client.get("/health")
 
     assert response.status_code == status.HTTP_200_OK
-    assert response.json() == {"status": "ok"}
+    assert response.json() == {"status": "ok", "database": "ok"}
 
 
 def test_dashboard_summary_uses_seeded_data(client, auth_headers):

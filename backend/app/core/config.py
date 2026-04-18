@@ -5,10 +5,24 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
+    app_env: str = Field(default="development", validation_alias=AliasChoices("APP_ENV"))
     app_name: str = "Pfoten-Held API"
     database_url: str = Field(
         default="postgresql+psycopg://postgres:postgres@localhost:5432/pawhero",
         validation_alias=AliasChoices("DATABASE_URL"),
+    )
+    migration_database_url: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("MIGRATION_DATABASE_URL"),
+    )
+    db_pool_mode: str = Field(default="session", validation_alias=AliasChoices("DB_POOL_MODE"))
+    db_statement_timeout_ms: int = Field(
+        default=30_000,
+        validation_alias=AliasChoices("DB_STATEMENT_TIMEOUT_MS"),
+    )
+    db_connect_timeout_seconds: int = Field(
+        default=10,
+        validation_alias=AliasChoices("DB_CONNECT_TIMEOUT_SECONDS"),
     )
     cors_origins: list[str] = Field(
         default_factory=lambda: ["http://localhost:3000"],
@@ -53,6 +67,19 @@ class Settings(BaseSettings):
         default="mailto:support@pfoten-held.de", validation_alias=AliasChoices("VAPID_SUBJECT")
     )
 
+    scheduler_enabled: bool = Field(
+        default=True,
+        validation_alias=AliasChoices("SCHEDULER_ENABLED"),
+    )
+    check_in_token_retention_days: int = Field(
+        default=7,
+        validation_alias=AliasChoices("CHECK_IN_TOKEN_RETENTION_DAYS"),
+    )
+    revoked_push_retention_days: int = Field(
+        default=30,
+        validation_alias=AliasChoices("REVOKED_PUSH_RETENTION_DAYS"),
+    )
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",
@@ -65,6 +92,14 @@ class Settings(BaseSettings):
         if len(value.encode("utf-8")) < 32:
             raise ValueError("JWT_SECRET_KEY muss mindestens 32 Byte lang sein (RFC 7518, HS256).")
         return value
+
+    @field_validator("db_pool_mode")
+    @classmethod
+    def validate_db_pool_mode(cls, value: str) -> str:
+        normalized = value.strip().lower()
+        if normalized not in {"session", "transaction"}:
+            raise ValueError("DB_POOL_MODE muss 'session' oder 'transaction' sein.")
+        return normalized
 
 
 @lru_cache

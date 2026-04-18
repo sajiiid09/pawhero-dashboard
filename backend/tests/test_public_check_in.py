@@ -5,6 +5,8 @@ from datetime import UTC, datetime, timedelta
 from sqlalchemy import select
 
 from app.db.models import CheckInActionToken, CheckInEvent
+from app.repositories.check_in import get_check_in_config
+from app.services.check_in import acknowledge_check_in
 from app.services.check_in_action_token import (
     _hash_token,
     generate_action_token,
@@ -12,8 +14,6 @@ from app.services.check_in_action_token import (
     lookup_token,
     mark_token_used,
 )
-from app.services.check_in import acknowledge_check_in
-from app.repositories.check_in import get_check_in_config
 
 
 def _make_config(session, owner_id: str, **overrides):
@@ -203,7 +203,7 @@ class TestAcknowledgeWithMethod:
 
         session = get_session_factory()()
         try:
-            config = _make_config(
+            _make_config(
                 session,
                 "owner-demo",
                 next_scheduled_at=datetime.now(UTC) - timedelta(minutes=5),
@@ -234,14 +234,14 @@ class TestAcknowledgeWithMethod:
 
         session = get_session_factory()()
         try:
-            config = _make_config(
+            _make_config(
                 session,
                 "owner-demo",
                 next_scheduled_at=datetime.now(UTC) - timedelta(minutes=5),
             )
             session.commit()
 
-            result = acknowledge_check_in(session, "owner-demo")
+            acknowledge_check_in(session, "owner-demo")
             session.commit()
 
             events = list(

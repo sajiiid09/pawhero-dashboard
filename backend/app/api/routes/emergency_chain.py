@@ -19,7 +19,11 @@ def get_emergency_chain(session: DbSession, owner_id: OwnerId) -> list[Emergency
     return list_chain_contacts(session, owner_id)
 
 
-@router.post("/contacts", response_model=EmergencyChainContactDTO, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/contacts",
+    response_model=EmergencyChainContactDTO,
+    status_code=status.HTTP_201_CREATED,
+)
 def create_emergency_contact(
     payload: EmergencyContactUpsertRequest,
     session: DbSession,
@@ -34,7 +38,11 @@ def create_emergency_contact(
 
 
 @router.get("/contacts/{contact_id}", response_model=EmergencyChainContactDTO)
-def get_emergency_contact(contact_id: str, session: DbSession, owner_id: OwnerId) -> EmergencyChainContactDTO:
+def get_emergency_contact(
+    contact_id: str,
+    session: DbSession,
+    owner_id: OwnerId,
+) -> EmergencyChainContactDTO:
     contact = emergency_chain_repository.get_contact(session, owner_id, contact_id)
     entry = emergency_chain_repository.get_chain_entry(session, owner_id, contact_id)
     if contact is None or entry is None:

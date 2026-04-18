@@ -1,6 +1,6 @@
 from datetime import UTC, datetime
 
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
 from app.db.models import PushSubscription
@@ -70,3 +70,13 @@ def revoke_subscription_by_endpoint(session: Session, owner_id: str, endpoint: s
 def mark_revoked(session: Session, subscription: PushSubscription) -> None:
     subscription.revoked_at = datetime.now(UTC)
     session.flush()
+
+
+def delete_revoked_before(session: Session, cutoff: datetime) -> int:
+    result = session.execute(
+        delete(PushSubscription).where(
+            PushSubscription.revoked_at.is_not(None),
+            PushSubscription.revoked_at < cutoff,
+        )
+    )
+    return result.rowcount or 0

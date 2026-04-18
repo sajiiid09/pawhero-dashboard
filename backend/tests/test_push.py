@@ -2,14 +2,12 @@
 
 from __future__ import annotations
 
-from unittest.mock import patch
-
 from fastapi import status
+from sqlalchemy import select
 
-from app.db.models import CheckInConfig, NotificationLog, NotificationType, PushSubscription
+from app.db.models import CheckInConfig, NotificationLog, PushSubscription
 from app.db.session import get_session_factory
 from app.services.push import PushResult
-from sqlalchemy import select
 
 
 def test_vapid_public_key_endpoint(client):

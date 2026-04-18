@@ -94,6 +94,8 @@ Backend tests (`conftest.py`) create a **temporary PostgreSQL database** per ses
 - **Config**: `app/core/config.py` via `pydantic-settings` (reads `DATABASE_URL`, `CORS_ORIGINS`, `JWT_SECRET_KEY`)
   - `JWT_SECRET_KEY` must be >= 32 bytes (startup validation)
   - OTP settings: `EMAIL_VERIFICATION_TTL_MINUTES`, `EMAIL_VERIFICATION_RESEND_COOLDOWN_SECONDS`
+- **Supabase Postgres**: Production app traffic may use Supabase transaction pooler (`:6543`) with `DB_POOL_MODE=transaction`. SQLAlchemy uses `NullPool` and disables psycopg prepared statements in transaction mode. Alembic prefers `MIGRATION_DATABASE_URL` when present, otherwise `DATABASE_URL`.
+- **Runtime safety**: `SCHEDULER_ENABLED` controls whether the APScheduler starts. Production must run exactly one scheduler instance. `GET /health` checks database connectivity without exposing internals.
 - **Migrations**: Alembic (`alembic/`). Always create migrations for schema changes.
 - **Models**: SQLAlchemy 2.0 declarative with `Mapped` columns. All models in `app/db/models.py`.
 - **Auth service**: `app/services/auth.py` — password hashing (bcrypt), JWT creation/verification, ID generation.
@@ -206,8 +208,9 @@ Backend tests (`conftest.py`) create a **temporary PostgreSQL database** per ses
 
 ### Backend
 - **Scheduler**: APScheduler `BackgroundScheduler` in `app/services/scheduler.py`, runs every 60s, starts/stops with FastAPI lifespan
+- **Maintenance cleanup**: Scheduler also prunes expired check-in action tokens past retention and revoked push subscriptions older than the configured retention window.
 - **Dispatcher** (`app/services/notification_dispatcher.py`):
-  - PENDING state → conditionally creates simulated owner push log (if `push_enabled`) and/or sends owner reminder email (if `email_enabled`) in the same cycle
+  - PENDING state → conditionally sends real owner Web Push (if `push_enabled`) and/or sends owner reminder email (if `email_enabled`) in the same cycle
   - ESCALATED state → conditionally sends real push to owner (if `push_enabled`), emails owner immediately, then emails emergency contacts sequentially in priority order (5-min gap). Emergency contact emails always send regardless of channel preferences.
   - Contact escalation emails must contain the public responder link (`/s/{token}`)
 - **Email service** (`app/services/email.py`): SMTP via Python stdlib (`smtplib`), plain text emails, German templates
@@ -221,7 +224,7 @@ Backend tests (`conftest.py`) create a **temporary PostgreSQL database** per ses
 - **Type**: `NotificationLogItem` in `dashboard/types.ts`
 - **Query key**: `notifications` in `query-keys.ts`
 - **Hook**: `useNotificationLogsQuery` in `hooks.ts`
-- **Component**: `NotificationHistoryCard` shows both type and channel so simulated push and email are distinguishable
+- **Component**: `NotificationHistoryCard` shows both type and channel so push and email are distinguishable
 - **Check-in page**: notification history section below escalation history
 - **Polling**: dashboard, notification history, escalation history, and emergency profiles refetch periodically for demo visibility
 
@@ -246,9 +249,10 @@ Backend tests (`conftest.py`) create a **temporary PostgreSQL database** per ses
 ### Architecture
 - **Supabase Storage** for file storage (public bucket `pet-images` + private bucket `pet-documents`).
 - **Pet images**: Public CDN URLs stored in `Pet.image_url`. Old data URLs still render (backward compatible).
-- **Pet documents**: Private storage with signed URLs via backend download endpoint.
+- **Pet documents**: Private storage with short-lived signed URLs via backend download endpoint.
 - **Storage service**: `app/services/storage.py` — abstraction over Supabase SDK (`supabase-py`). Uses service key server-side (bypasses RLS).
 - **Config**: `SUPABASE_URL`, `SUPABASE_SECRET_KEY`, `SUPABASE_PUBLISHABLE_KEY` env vars.
+- **Bucket requirements**: `pet-images` allows JPEG/PNG/WebP up to 5 MB; `pet-documents` allows PDF/JPEG/PNG/WebP up to 10 MB. `SUPABASE_SECRET_KEY` must remain backend-only.
 
 ### Backend
 - **PetDocument model** in `app/db/models.py` — id, owner_id, pet_id, title, document_type, original_filename, content_type, size_bytes, storage_key, is_public, created_at

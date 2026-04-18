@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
 from app.db.models import CheckInActionToken
@@ -51,6 +51,13 @@ def create_action_token(
 def mark_token_used(token: CheckInActionToken, used_at: datetime) -> None:
     token.used_at = used_at
     _session_flush(token)
+
+
+def delete_expired_before(session: Session, cutoff: datetime) -> int:
+    result = session.execute(
+        delete(CheckInActionToken).where(CheckInActionToken.expires_at < cutoff)
+    )
+    return result.rowcount or 0
 
 
 def _session_flush(obj: object) -> None:

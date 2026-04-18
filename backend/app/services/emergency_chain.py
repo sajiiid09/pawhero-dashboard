@@ -28,7 +28,10 @@ def list_chain_contacts(session: Session, owner_id: str) -> list[EmergencyChainC
 def move_contact(session: Session, owner_id: str, contact_id: str, direction: str) -> None:
     ordered_pairs = emergency_chain_repository.list_ordered_contacts(session, owner_id)
     ordered_entries = [entry for _, entry in ordered_pairs]
-    index = next((i for i, entry in enumerate(ordered_entries) if entry.contact_id == contact_id), -1)
+    index = next(
+        (i for i, entry in enumerate(ordered_entries) if entry.contact_id == contact_id),
+        -1,
+    )
 
     if index == -1:
         raise LookupError("Emergency contact not found.")
