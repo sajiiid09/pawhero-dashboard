@@ -1,4 +1,4 @@
-import { apiRequest } from "@/lib/api-client";
+import { apiRequest, apiUpload } from "@/lib/api-client";
 import type {
   CheckInConfig,
   EmergencyChainContact,
@@ -6,6 +6,7 @@ import type {
   EmergencyProfileView,
   MoveDirection,
   Pet,
+  PetDocumentItem,
   PetInput,
 } from "@/features/app/types";
 import type {
@@ -139,5 +140,40 @@ export function acknowledgePublicEmergency(token: string, email: string, name?: 
       method: "POST",
       body: JSON.stringify({ email, name: name || undefined }),
     },
+  );
+}
+
+export function uploadPetImage(petId: string, file: File) {
+  const formData = new FormData();
+  formData.append("file", file);
+  return apiUpload<Pet>(`/pets/${petId}/image`, formData);
+}
+
+export function listPetDocuments(petId: string) {
+  return apiRequest<PetDocumentItem[]>(`/pets/${petId}/documents`);
+}
+
+export function uploadPetDocument(
+  petId: string,
+  file: File,
+  title: string,
+  documentType: string,
+) {
+  const formData = new FormData();
+  formData.append("file", file);
+  formData.append("title", title);
+  formData.append("document_type", documentType);
+  return apiUpload<PetDocumentItem>(`/pets/${petId}/documents`, formData);
+}
+
+export function deletePetDocument(petId: string, documentId: string) {
+  return apiRequest<void>(`/pets/${petId}/documents/${documentId}`, {
+    method: "DELETE",
+  });
+}
+
+export function getPetDocumentDownloadUrl(petId: string, documentId: string) {
+  return apiRequest<{ url: string }>(
+    `/pets/${petId}/documents/${documentId}/download`,
   );
 }

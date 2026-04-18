@@ -7,7 +7,6 @@ export const petFormSchema = z.object({
   weightKg: z.number().min(0.1, "Bitte ein Gewicht angeben.").max(120),
   chipNumber: z.string().min(1, "Bitte eine ID oder Chipnummer angeben."),
   address: z.string().min(8, "Bitte eine vollstaendige Adresse angeben."),
-  imageUrl: z.string().nullable().optional(),
   preExistingConditions: z.string().min(1, "Bitte eine Angabe machen."),
   allergies: z.string().min(1, "Bitte eine Angabe machen."),
   medications: z.string().min(1, "Bitte eine Angabe machen."),

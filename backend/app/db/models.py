@@ -81,6 +81,10 @@ class Owner(Base):
         back_populates="owner",
         cascade="all, delete-orphan",
     )
+    pet_documents: Mapped[list[PetDocument]] = relationship(
+        back_populates="owner",
+        cascade="all, delete-orphan",
+    )
 
 
 class Pet(TimestampMixin, Base):
@@ -112,6 +116,9 @@ class Pet(TimestampMixin, Base):
     )
 
     owner: Mapped[Owner] = relationship(back_populates="pets")
+    documents: Mapped[list[PetDocument]] = relationship(
+        back_populates="pet", cascade="all, delete-orphan"
+    )
 
 
 class EmergencyContact(TimestampMixin, Base):
@@ -237,3 +244,23 @@ class ResponderAcknowledgment(TimestampMixin, Base):
     responder_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
 
     escalation_event: Mapped[EscalationEvent] = relationship(back_populates="acknowledgments")
+
+
+class PetDocument(TimestampMixin, Base):
+    __tablename__ = "pet_documents"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    owner_id: Mapped[str] = mapped_column(
+        ForeignKey("owners.id", ondelete="CASCADE"), nullable=False
+    )
+    pet_id: Mapped[str] = mapped_column(ForeignKey("pets.id", ondelete="CASCADE"), nullable=False)
+    title: Mapped[str] = mapped_column(String(255), nullable=False)
+    document_type: Mapped[str] = mapped_column(String(32), nullable=False)
+    original_filename: Mapped[str] = mapped_column(String(255), nullable=False)
+    content_type: Mapped[str] = mapped_column(String(64), nullable=False)
+    size_bytes: Mapped[int] = mapped_column(Integer, nullable=False)
+    storage_key: Mapped[str] = mapped_column(String(512), nullable=False)
+    is_public: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+
+    owner: Mapped[Owner] = relationship(back_populates="pet_documents")
+    pet: Mapped[Pet] = relationship(back_populates="documents")

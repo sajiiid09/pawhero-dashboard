@@ -39,6 +39,14 @@ class Settings(BaseSettings):
     )
     app_url: str = Field(default="http://localhost:3000", validation_alias=AliasChoices("APP_URL"))
 
+    supabase_url: str = Field(default="", validation_alias=AliasChoices("SUPABASE_URL"))
+    supabase_secret_key: str = Field(
+        default="", validation_alias=AliasChoices("SUPABASE_SECRET_KEY")
+    )
+    supabase_publishable_key: str = Field(
+        default="", validation_alias=AliasChoices("SUPABASE_PUBLISHABLE_KEY")
+    )
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",
@@ -49,9 +57,7 @@ class Settings(BaseSettings):
     @classmethod
     def validate_jwt_secret_key(cls, value: str) -> str:
         if len(value.encode("utf-8")) < 32:
-            raise ValueError(
-                "JWT_SECRET_KEY muss mindestens 32 Byte lang sein (RFC 7518, HS256)."
-            )
+            raise ValueError("JWT_SECRET_KEY muss mindestens 32 Byte lang sein (RFC 7518, HS256).")
         return value
 
 

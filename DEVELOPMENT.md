@@ -5,6 +5,7 @@
 - Phase 1-3 foundation: Next.js frontend, FastAPI backend, PostgreSQL, auth, pets, emergency chain, check-in config, public emergency profiles.
 - Check-in state machine, scheduler, notification history, public responder acknowledgment.
 - Complete demo flow: simulated owner push + owner email on pending, owner escalation email, sequential emergency-contact escalation emails with public link, responder acknowledgment email back to owner.
+- **Phase 1 (Storage Foundation)**: Supabase Storage integration, pet image upload, pet document CRUD with signed URL downloads, frontend document management UI.
 
 ## Current Behavior
 

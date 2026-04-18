@@ -4,7 +4,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { motion } from "framer-motion";
 import { ImagePlus, Save, Trash2 } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useForm, useWatch } from "react-hook-form";
 
 import { Button } from "@/components/ui/button";
@@ -17,6 +17,7 @@ import {
   useDeletePetMutation,
   usePetQuery,
   useSavePetMutation,
+  useUploadPetImageMutation,
 } from "@/features/app/hooks";
 import { petFormSchema, type PetFormValues } from "@/features/app/schemas";
 
@@ -28,10 +29,23 @@ export function PetForm({ petId }: PetFormProps) {
   const router = useRouter();
   const { data: pet, error, isLoading } = usePetQuery(petId);
   const savePetMutation = useSavePetMutation(petId);
+  const uploadImageMutation = useUploadPetImageMutation();
   const deletePetMutation = useDeletePetMutation();
-  const [previewOverride, setPreviewOverride] = useState<string | null>(null);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [blobPreview, setBlobPreview] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
-  const preview = previewOverride ?? pet?.imageUrl ?? null;
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const preview = blobPreview ?? pet?.imageUrl ?? null;
+
+  // Clean up blob URL when component unmounts or file changes
+  useEffect(() => {
+    return () => {
+      if (blobPreview) {
+        URL.revokeObjectURL(blobPreview);
+      }
+    };
+  }, [blobPreview]);
 
   const defaultValues = useMemo<PetFormValues>(
     () => ({
@@ -41,7 +55,6 @@ export function PetForm({ petId }: PetFormProps) {
       weightKg: pet?.weightKg ?? 20,
       chipNumber: pet?.chipNumber ?? "",
       address: pet?.address ?? "",
-      imageUrl: pet?.imageUrl ?? null,
       preExistingConditions: pet?.medicalProfile.preExistingConditions ?? "Keine aktiven Vorerkrankungen",
       allergies: pet?.medicalProfile.allergies ?? "Keine bekannten Allergien",
       medications: pet?.medicalProfile.medications ?? "Keine taeglichen Medikamente",
@@ -64,6 +77,8 @@ export function PetForm({ petId }: PetFormProps) {
     control: form.control,
     name: "name",
   });
+
+  const isSaving = savePetMutation.isPending || uploadImageMutation.isPending;
 
   if (isLoading) {
     return (
@@ -98,7 +113,7 @@ export function PetForm({ petId }: PetFormProps) {
         weightKg: values.weightKg,
         chipNumber: values.chipNumber,
         address: values.address,
-        imageUrl: values.imageUrl ?? preview,
+        imageUrl: pet?.imageUrl ?? null,
         medicalProfile: {
           preExistingConditions: values.preExistingConditions,
           allergies: values.allergies,
@@ -115,30 +130,51 @@ export function PetForm({ petId }: PetFormProps) {
         spareKeyLocation: values.spareKeyLocation,
       });
 
+      // Upload image separately if a new file was selected
+      if (selectedFile) {
+        try {
+          await uploadImageMutation.mutateAsync({
+            petId: savedPet.id,
+            file: selectedFile,
+          });
+        } catch {
+          // Image upload failed but pet was saved — show error but stay on page
+        }
+      }
+
+      setSelectedFile(null);
       router.push(`/pets/${savedPet.id}/edit`);
     } catch {
       // Mutation state already drives the inline error UI.
     }
   }
 
-  async function handleFileChange(file: File | null) {
+  function handleFileChange(file: File | null) {
     if (!file) {
       return;
     }
 
-    const dataUrl = await fileToDataUrl(file);
-    setPreviewOverride(dataUrl);
-    form.setValue("imageUrl", dataUrl, { shouldDirty: true });
+    // Revoke previous blob URL
+    if (blobPreview) {
+      URL.revokeObjectURL(blobPreview);
+    }
+
+    setSelectedFile(file);
+    setBlobPreview(URL.createObjectURL(file));
   }
+
+  const errorMessage =
+    savePetMutation.error?.message ||
+    uploadImageMutation.error?.message;
 
   return (
     <>
       <MotionPage className="space-y-6">
         <MotionSection>
           <form className="space-y-6" onSubmit={form.handleSubmit(onSubmit)}>
-            {savePetMutation.error ? (
+            {errorMessage ? (
               <div className="rounded-[22px] border border-danger/20 bg-danger-soft px-5 py-4 text-sm font-semibold text-danger">
-                {savePetMutation.error.message}
+                {errorMessage}
               </div>
             ) : null}
             <FormSection
@@ -169,11 +205,12 @@ export function PetForm({ petId }: PetFormProps) {
                       Foto auswaehlen
                     </span>
                     <input
+                      ref={fileInputRef}
                       type="file"
-                      accept="image/*"
+                      accept="image/jpeg,image/png,image/webp"
                       className="sr-only"
                       onChange={(event) => {
-                        void handleFileChange(event.target.files?.[0] ?? null);
+                        handleFileChange(event.target.files?.[0] ?? null);
                       }}
                     />
                   </label>
@@ -266,10 +303,10 @@ export function PetForm({ petId }: PetFormProps) {
               <Button
                 type="submit"
                 className="gap-2"
-                disabled={savePetMutation.isPending}
+                disabled={isSaving}
               >
                 <Save className="h-4 w-4" />
-                {savePetMutation.isPending ? "Speichert..." : "Speichern"}
+                {isSaving ? "Speichert..." : "Speichern"}
               </Button>
             </motion.div>
           </form>
@@ -296,13 +333,4 @@ export function PetForm({ petId }: PetFormProps) {
       />
     </>
   );
-}
-
-function fileToDataUrl(file: File) {
-  return new Promise<string>((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(String(reader.result));
-    reader.onerror = () => reject(reader.error);
-    reader.readAsDataURL(file);
-  });
 }

@@ -171,6 +171,39 @@ Backend tests (`conftest.py`) create a **temporary PostgreSQL database** per ses
 - **"Ich kümmere mich" action**: form for responders to acknowledge (email + optional name), calls POST endpoint, shows confirmation
 - **Mobile responsive**: responsive font sizes, larger touch targets, responsive header layout
 
+## Storage Foundation (Phase 1)
+
+### Architecture
+- **Supabase Storage** for file storage (public bucket `pet-images` + private bucket `pet-documents`).
+- **Pet images**: Public CDN URLs stored in `Pet.image_url`. Old data URLs still render (backward compatible).
+- **Pet documents**: Private storage with signed URLs via backend download endpoint.
+- **Storage service**: `app/services/storage.py` — abstraction over Supabase SDK (`supabase-py`). Uses service key server-side (bypasses RLS).
+- **Config**: `SUPABASE_URL`, `SUPABASE_SECRET_KEY`, `SUPABASE_PUBLISHABLE_KEY` env vars.
+
+### Backend
+- **PetDocument model** in `app/db/models.py` — id, owner_id, pet_id, title, document_type, original_filename, content_type, size_bytes, storage_key, is_public, created_at
+- **Document types**: `medical_record`, `vaccination_record`, `insurance`, `lab_result`, `other`
+- **Migration**: `alembic/versions/0008_pet_documents.py`
+- **Schemas**: `app/schemas/documents.py` — `PetDocumentDTO`
+- **Repository**: `app/repositories/documents.py` — CRUD scoped to owner, count for limit (max 20/pet)
+- **Service**: `app/services/documents.py` — serialization
+- **Endpoints** (`app/api/routes/pets.py`):
+  - `POST /pets/{pet_id}/image` — multipart image upload (JPEG/PNG/WebP, max 5MB)
+- **Endpoints** (`app/api/routes/documents.py`):
+  - `GET /pets/{pet_id}/documents` — list documents
+  - `POST /pets/{pet_id}/documents` — multipart upload with title + document_type
+  - `DELETE /pets/{pet_id}/documents/{document_id}` — delete document + storage file
+  - `GET /pets/{pet_id}/documents/{document_id}/download` — returns signed URL for private download
+- **Pet delete** cleans up image and all document storage files
+
+### Frontend
+- **`apiUpload()`** in `api-client.ts` — multipart upload without `Content-Type: application/json`
+- **Image upload**: Two-step save (text fields first → image upload after). Uses `URL.createObjectURL()` for local preview.
+- **`PetDocumentsSection`** in `features/pets/pet-documents-section.tsx` — document list, upload form, download, delete on pet edit page
+- **Document hooks**: `usePetDocumentsQuery`, `useUploadPetDocumentMutation`, `useDeletePetDocumentMutation`, `useDownloadPetDocument`
+- **Query keys**: `petDocuments(petId)` in `query-keys.ts`
+- **`imageUrl` removed from pet form schema** — image uploaded separately via dedicated endpoint
+
 ## Documentation Discipline
 
 - Keep `AGENTS.md` and `DEVELOPMENT.md` concise and current after each phase.

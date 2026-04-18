@@ -12,6 +12,7 @@ import {
   acknowledgeCheckIn,
   deleteEmergencyContact,
   deletePet,
+  deletePetDocument,
   getCheckInConfig,
   getCheckInEvents,
   getDashboardSummary,
@@ -20,13 +21,17 @@ import {
   getEmergencyContact,
   getEmergencyProfile,
   getNotificationLogs,
+  getPetDocumentDownloadUrl,
   getPublicEmergencyProfile,
   getPet,
   getPets,
+  listPetDocuments,
   moveEmergencyContact,
   saveEmergencyContact,
   savePet,
   updateCheckInConfig,
+  uploadPetDocument,
+  uploadPetImage,
 } from "@/features/app/api";
 import { appQueryKeys } from "@/features/app/query-keys";
 import type {
@@ -259,6 +264,76 @@ export function usePublicEmergencyProfileQuery(token: string) {
     queryFn: () => getPublicEmergencyProfile(token),
     enabled: Boolean(token),
     refetchInterval: 15_000,
+  });
+}
+
+export function useUploadPetImageMutation() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ petId, file }: { petId: string; file: File }) =>
+      uploadPetImage(petId, file),
+    onSuccess: async (pet) => {
+      queryClient.setQueryData(appQueryKeys.pet(pet.id), pet);
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: appQueryKeys.pets }),
+        queryClient.invalidateQueries({ queryKey: appQueryKeys.dashboard }),
+      ]);
+    },
+  });
+}
+
+export function usePetDocumentsQuery(petId: string) {
+  return useQuery({
+    queryKey: appQueryKeys.petDocuments(petId),
+    queryFn: () => listPetDocuments(petId),
+    enabled: Boolean(petId),
+  });
+}
+
+export function useUploadPetDocumentMutation(petId: string) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({
+      file,
+      title,
+      documentType,
+    }: {
+      file: File;
+      title: string;
+      documentType: string;
+    }) => uploadPetDocument(petId, file, title, documentType),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({
+        queryKey: appQueryKeys.petDocuments(petId),
+      });
+    },
+  });
+}
+
+export function useDeletePetDocumentMutation(petId: string) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (documentId: string) => deletePetDocument(petId, documentId),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({
+        queryKey: appQueryKeys.petDocuments(petId),
+      });
+    },
+  });
+}
+
+export function useDownloadPetDocument(petId: string) {
+  return useMutation({
+    mutationFn: (documentId: string) =>
+      getPetDocumentDownloadUrl(petId, documentId),
+    onSuccess: (data) => {
+      if (data.url) {
+        window.open(data.url, "_blank");
+      }
+    },
   });
 }
 

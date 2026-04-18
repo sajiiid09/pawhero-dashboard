@@ -76,3 +76,22 @@ export type EmergencyContactInput = Omit<EmergencyChainContact, "id">;
 export type MoveDirection = "up" | "down";
 export type CheckInConfigInput = Omit<CheckInConfig, "nextScheduledAt">;
 export type RecentCheckInHistory = CheckInHistoryItem[];
+
+export type DocumentType =
+  | "medical_record"
+  | "vaccination_record"
+  | "insurance"
+  | "lab_result"
+  | "other";
+
+export type PetDocumentItem = {
+  id: string;
+  petId: string;
+  title: string;
+  documentType: DocumentType;
+  originalFilename: string;
+  contentType: string;
+  sizeBytes: number;
+  isPublic: boolean;
+  createdAt: string;
+};
