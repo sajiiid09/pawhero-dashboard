@@ -137,8 +137,8 @@ def seed_demo_data() -> None:
                 owner_id=owner.id,
                 interval_hours=12,
                 escalation_delay_minutes=30,
-                primary_method="push",
-                backup_method="email",
+                push_enabled=True,
+                email_enabled=True,
                 next_scheduled_at=now + timedelta(minutes=42),
             )
         )

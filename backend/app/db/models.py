@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from enum import StrEnum
 
+import sqlalchemy as sa
 from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
@@ -165,6 +166,12 @@ class EmergencyChainEntry(Base):
 
 class CheckInConfig(Base):
     __tablename__ = "check_in_configs"
+    __table_args__ = (
+        sa.CheckConstraint(
+            "push_enabled = TRUE OR email_enabled = TRUE",
+            name="ck_check_in_configs_at_least_one_channel",
+        ),
+    )
 
     owner_id: Mapped[str] = mapped_column(
         ForeignKey("owners.id", ondelete="CASCADE"),
@@ -172,8 +179,8 @@ class CheckInConfig(Base):
     )
     interval_hours: Mapped[int] = mapped_column(Integer, nullable=False)
     escalation_delay_minutes: Mapped[int] = mapped_column(Integer, nullable=False)
-    primary_method: Mapped[str] = mapped_column(String(32), nullable=False)
-    backup_method: Mapped[str] = mapped_column(String(32), nullable=False)
+    push_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    email_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     next_scheduled_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 
     owner: Mapped[Owner] = relationship(back_populates="check_in_config")

@@ -62,13 +62,17 @@ def _send_pending_notifications(session: Session, config: CheckInConfig) -> None
     cycle_key = config.next_scheduled_at.isoformat()
     did_change = False
 
-    if _find_cycle_notification(
-        session,
-        owner_id=config.owner_id,
-        cycle_key=cycle_key,
-        notification_type=NotificationType.OWNER_REMINDER,
-        channel=NotificationChannel.PUSH,
-    ) is None:
+    if (
+        config.push_enabled
+        and _find_cycle_notification(
+            session,
+            owner_id=config.owner_id,
+            cycle_key=cycle_key,
+            notification_type=NotificationType.OWNER_REMINDER,
+            channel=NotificationChannel.PUSH,
+        )
+        is None
+    ):
         _log_notification(
             session,
             owner_id=config.owner_id,
@@ -79,15 +83,23 @@ def _send_pending_notifications(session: Session, config: CheckInConfig) -> None
         )
         did_change = True
 
-    if _find_cycle_notification(
-        session,
-        owner_id=config.owner_id,
-        cycle_key=cycle_key,
-        notification_type=NotificationType.OWNER_REMINDER,
-        channel=NotificationChannel.EMAIL,
-    ) is None:
+    if (
+        config.email_enabled
+        and _find_cycle_notification(
+            session,
+            owner_id=config.owner_id,
+            cycle_key=cycle_key,
+            notification_type=NotificationType.OWNER_REMINDER,
+            channel=NotificationChannel.EMAIL,
+        )
+        is None
+    ):
         settings = get_settings()
-        subject, body = build_reminder_email(owner.display_name, settings.app_url)
+        subject, body = build_reminder_email(
+            owner.display_name,
+            settings.app_url,
+            include_push_note=config.push_enabled,
+        )
         _send_email_notification(
             session,
             owner_id=config.owner_id,

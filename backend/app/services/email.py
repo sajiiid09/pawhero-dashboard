@@ -38,14 +38,24 @@ def send_email(to: str, subject: str, body: str) -> None:
         raise
 
 
-def build_reminder_email(owner_name: str, app_url: str) -> tuple[str, str]:
+def build_reminder_email(
+    owner_name: str,
+    app_url: str,
+    *,
+    include_push_note: bool = True,
+) -> tuple[str, str]:
     subject = "Pfoten-Held: Check-In erforderlich"
+    push_note = (
+        "\nZur gleichen Zeit wurde auch eine Push-Benachrichtigung "
+        "fuer diesen Check-In ausgelost.\n"
+        if include_push_note
+        else ""
+    )
     body = (
         f"Hallo {owner_name},\n\n"
         "dein naechster Check-In ist faellig. "
         "Bitte melde dich an und bestaetige jetzt, dass alles in Ordnung ist.\n\n"
-        "Zur gleichen Zeit wurde auch eine Push-Benachrichtigung "
-        "fuer diesen Check-In ausgelost.\n\n"
+        f"{push_note}"
         f"Dashboard: {app_url}/dashboard\n\n"
         "Wenn du nicht rechtzeitig reagierst, wird deine Notfallkette benachrichtigt.\n\n"
         "Dein Pfoten-Held Team"

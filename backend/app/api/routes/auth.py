@@ -32,8 +32,8 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 
 DEFAULT_CHECK_IN_INTERVAL_HOURS = 12
 DEFAULT_ESCALATION_DELAY_MINUTES = 30
-DEFAULT_PRIMARY_METHOD = "push"
-DEFAULT_BACKUP_METHOD = "email"
+DEFAULT_PUSH_ENABLED = True
+DEFAULT_EMAIL_ENABLED = True
 
 
 def _ensure_default_check_in_config(session: DbSession, owner_id: str) -> None:
@@ -46,8 +46,8 @@ def _ensure_default_check_in_config(session: DbSession, owner_id: str) -> None:
             owner_id=owner_id,
             interval_hours=DEFAULT_CHECK_IN_INTERVAL_HOURS,
             escalation_delay_minutes=DEFAULT_ESCALATION_DELAY_MINUTES,
-            primary_method=DEFAULT_PRIMARY_METHOD,
-            backup_method=DEFAULT_BACKUP_METHOD,
+            push_enabled=DEFAULT_PUSH_ENABLED,
+            email_enabled=DEFAULT_EMAIL_ENABLED,
             next_scheduled_at=datetime.now(UTC) + timedelta(hours=DEFAULT_CHECK_IN_INTERVAL_HOURS),
         )
     )

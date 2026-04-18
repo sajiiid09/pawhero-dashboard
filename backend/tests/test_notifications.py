@@ -50,9 +50,7 @@ def test_pending_dispatch_creates_push_and_email_once(monkeypatch, test_database
             )
         )
         reminder_logs = [
-            log
-            for log in logs
-            if log.notification_type == NotificationType.OWNER_REMINDER
+            log for log in logs if log.notification_type == NotificationType.OWNER_REMINDER
         ]
 
         assert len(reminder_logs) == 2
@@ -98,9 +96,7 @@ def test_escalation_dispatch_emails_owner_then_contacts_with_public_link(
             )
         )
         owner_alerts = [
-            log
-            for log in logs
-            if log.notification_type == NotificationType.OWNER_ESCALATION
+            log for log in logs if log.notification_type == NotificationType.OWNER_ESCALATION
         ]
         contact_alerts = [
             log
@@ -123,13 +119,16 @@ def test_escalation_dispatch_emails_owner_then_contacts_with_public_link(
                 .order_by(NotificationLog.created_at)
             )
         )
-        assert len(
-            [
-                log
-                for log in logs_after_second_run
-                if log.notification_type == NotificationType.EMERGENCY_CONTACT_ESCALATION
-            ]
-        ) == 1
+        assert (
+            len(
+                [
+                    log
+                    for log in logs_after_second_run
+                    if log.notification_type == NotificationType.EMERGENCY_CONTACT_ESCALATION
+                ]
+            )
+            == 1
+        )
 
         first_contact_log = contact_alerts[0]
         first_contact_log.created_at = datetime.now(UTC) - CONTACT_NOTIFY_GAP - timedelta(minutes=1)
@@ -206,4 +205,95 @@ def test_public_acknowledgment_logs_owner_notification(client, auth_headers, mon
         assert summary.status_code == 200
         assert summary.json()["escalationStatus"]["title"] == "Hilfe bestaetigt"
     finally:
+        session.close()
+
+
+def test_pending_dispatch_respects_push_disabled(monkeypatch, test_database_url: str):
+    del test_database_url
+    deliveries: list[tuple[str, str, str]] = []
+
+    def fake_send_email(*, to: str, subject: str, body: str) -> None:
+        deliveries.append((to, subject, body))
+
+    monkeypatch.setattr("app.services.notification_dispatcher.send_email", fake_send_email)
+
+    session = get_session_factory()()
+    try:
+        _reset_notification_flow_state(session)
+        config = session.scalar(select(CheckInConfig).where(CheckInConfig.owner_id == "owner-demo"))
+        assert config is not None
+        config.next_scheduled_at = datetime.now(UTC) - timedelta(minutes=5)
+        config.escalation_delay_minutes = 30
+        config.push_enabled = False
+        config.email_enabled = True
+        session.commit()
+
+        dispatch_notifications(session)
+
+        logs = list(
+            session.scalars(
+                select(NotificationLog)
+                .where(NotificationLog.owner_id == "owner-demo")
+                .order_by(NotificationLog.created_at)
+            )
+        )
+        reminder_logs = [
+            log for log in logs if log.notification_type == NotificationType.OWNER_REMINDER
+        ]
+
+        assert len(reminder_logs) == 1
+        assert reminder_logs[0].channel == "email"
+        assert len(deliveries) == 1
+    finally:
+        # Restore defaults for other tests.
+        config = session.scalar(select(CheckInConfig).where(CheckInConfig.owner_id == "owner-demo"))
+        if config:
+            config.push_enabled = True
+            config.email_enabled = True
+            session.commit()
+        session.close()
+
+
+def test_pending_dispatch_respects_email_disabled(monkeypatch, test_database_url: str):
+    del test_database_url
+    deliveries: list[tuple[str, str, str]] = []
+
+    def fake_send_email(*, to: str, subject: str, body: str) -> None:
+        deliveries.append((to, subject, body))
+
+    monkeypatch.setattr("app.services.notification_dispatcher.send_email", fake_send_email)
+
+    session = get_session_factory()()
+    try:
+        _reset_notification_flow_state(session)
+        config = session.scalar(select(CheckInConfig).where(CheckInConfig.owner_id == "owner-demo"))
+        assert config is not None
+        config.next_scheduled_at = datetime.now(UTC) - timedelta(minutes=5)
+        config.escalation_delay_minutes = 30
+        config.push_enabled = True
+        config.email_enabled = False
+        session.commit()
+
+        dispatch_notifications(session)
+
+        logs = list(
+            session.scalars(
+                select(NotificationLog)
+                .where(NotificationLog.owner_id == "owner-demo")
+                .order_by(NotificationLog.created_at)
+            )
+        )
+        reminder_logs = [
+            log for log in logs if log.notification_type == NotificationType.OWNER_REMINDER
+        ]
+
+        assert len(reminder_logs) == 1
+        assert reminder_logs[0].channel == "push"
+        assert len(deliveries) == 0
+    finally:
+        config = session.scalar(select(CheckInConfig).where(CheckInConfig.owner_id == "owner-demo"))
+        if config:
+            config.push_enabled = True
+            config.email_enabled = True
+            session.commit()
         session.close()

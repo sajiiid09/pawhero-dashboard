@@ -6,12 +6,13 @@
 - Check-in state machine, scheduler, notification history, public responder acknowledgment.
 - Complete demo flow: simulated owner push + owner email on pending, owner escalation email, sequential emergency-contact escalation emails with public link, responder acknowledgment email back to owner.
 - **Phase 1 (Storage Foundation)**: Supabase Storage integration, pet image upload, pet document CRUD with signed URL downloads, frontend document management UI.
+- **Phase 2 (Notification Preferences)**: Toggle switches for push/email channels, conditional notification dispatch per channel, last-channel protection, updated schemas and migration.
 
 ## Current Behavior
 
 - Scheduler runs every 60s.
-- Pending overdue cycle logs `push` and sends `email` for the owner in the same cycle.
-- Escalation emails the owner immediately, then emergency contacts in priority order with a 5-minute gap.
+- Pending overdue cycle conditionally logs `push` (if `push_enabled`) and/or sends `email` (if `email_enabled`) for the owner.
+- Escalation emails the owner immediately, then emergency contacts in priority order with a 5-minute gap. Emergency contact emails always send regardless of channel preferences.
 - Public responder flow uses `/s/{token}` and updates owner-facing status after acknowledgment.
 
 ## Deferred

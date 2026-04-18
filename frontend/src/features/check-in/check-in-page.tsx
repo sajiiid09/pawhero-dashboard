@@ -3,7 +3,6 @@
 import { BellRing, ShieldAlert } from "lucide-react";
 
 import { PageHeader } from "@/components/page-header";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { MotionPage, MotionSection } from "@/components/ui/motion";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -17,7 +16,7 @@ import {
 import type { CheckInConfigInput } from "@/features/app/types";
 import { CheckInHistorySection } from "@/features/dashboard/components/check-in-history-section";
 import type { CheckInHistoryItem } from "@/features/dashboard/types";
-import { formatCheckInTime, getCheckInMethodLabel } from "@/features/dashboard/view-model";
+import { formatCheckInTime, getActiveChannelsLabel } from "@/features/dashboard/view-model";
 import { EscalationHistoryCard } from "@/features/check-in/components/escalation-history-card";
 import { NotificationHistoryCard } from "@/features/check-in/components/notification-history-card";
 
@@ -53,13 +52,18 @@ export function CheckInPage() {
   const currentConfig = config;
 
   function applyConfigPatch(patch: Partial<CheckInConfigInput>) {
-    updateCheckInConfigMutation.mutate({
+    const next = {
       intervalHours: patch.intervalHours ?? currentConfig.intervalHours,
       escalationDelayMinutes:
         patch.escalationDelayMinutes ?? currentConfig.escalationDelayMinutes,
-      primaryMethod: patch.primaryMethod ?? currentConfig.primaryMethod,
-      backupMethod: patch.backupMethod ?? currentConfig.backupMethod,
-    });
+      pushEnabled: patch.pushEnabled ?? currentConfig.pushEnabled,
+      emailEnabled: patch.emailEnabled ?? currentConfig.emailEnabled,
+    };
+
+    // Prevent disabling both channels.
+    if (!next.pushEnabled && !next.emailEnabled) return;
+
+    updateCheckInConfigMutation.mutate(next);
   }
 
   return (
@@ -68,7 +72,7 @@ export function CheckInPage() {
         <PageHeader
           eyebrow="Pfoten-Held"
           title="Check-In Konfiguration"
-          description="Stimme Sicherheitsniveau und Komfort ab. Bei ausbleibendem Check-In werden Push und E-Mail in dieser Demo parallel ausgeloest."
+          description="Stimme Sicherheitsniveau und Komfort ab. Bei ausbleibendem Check-In werden die aktivierten Kanaele ausgeloest."
         />
       </MotionSection>
 
@@ -131,36 +135,63 @@ export function CheckInPage() {
                   <div className="flex items-center gap-2 text-primary">
                     <BellRing className="h-4 w-4" />
                     <p className="text-sm font-bold uppercase tracking-[0.12em]">
-                      Benachrichtigungen
+                      Benachrichtigungskanaele
                     </p>
                   </div>
                   <div className="mt-4 space-y-3">
-                    <button
-                      type="button"
-                      className="flex w-full items-center justify-between rounded-[18px] border border-border-soft bg-white px-4 py-3 text-left"
-                      onClick={() => applyConfigPatch({ primaryMethod: "push" })}
-                      disabled={updateCheckInConfigMutation.isPending}
-                    >
+                    <div className="flex w-full items-center justify-between rounded-[18px] border border-border-soft bg-white px-4 py-3">
                       <span className="font-semibold text-foreground">
                         Mobile Push-Nachricht
                       </span>
-                      {config.primaryMethod === "push" ? (
-                        <Badge tone="success">Aktiv</Badge>
-                      ) : null}
-                    </button>
-                    <button
-                      type="button"
-                      className="flex w-full items-center justify-between rounded-[18px] border border-border-soft bg-white px-4 py-3 text-left"
-                      onClick={() => applyConfigPatch({ backupMethod: "email" })}
-                      disabled={updateCheckInConfigMutation.isPending}
-                    >
+                      <button
+                        type="button"
+                        role="switch"
+                        aria-checked={config.pushEnabled}
+                        disabled={!config.pushEnabled && !config.emailEnabled ? false : updateCheckInConfigMutation.isPending}
+                        onClick={() => applyConfigPatch({ pushEnabled: !config.pushEnabled })}
+                        className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer items-center rounded-full transition-colors duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 ${
+                          config.pushEnabled ? "bg-primary" : "bg-border-soft"
+                        }`}
+                      >
+                        <span
+                          className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow-sm transition-transform duration-200 ${
+                            config.pushEnabled ? "translate-x-6" : "translate-x-1"
+                          }`}
+                        />
+                      </button>
+                    </div>
+                    <div className="flex w-full items-center justify-between rounded-[18px] border border-border-soft bg-white px-4 py-3">
                       <span className="font-semibold text-foreground">E-Mail</span>
-                      {config.backupMethod === "email" ? <Badge>Aktiv</Badge> : null}
-                    </button>
+                      <button
+                        type="button"
+                        role="switch"
+                        aria-checked={config.emailEnabled}
+                        disabled={updateCheckInConfigMutation.isPending}
+                        onClick={() => applyConfigPatch({ emailEnabled: !config.emailEnabled })}
+                        className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer items-center rounded-full transition-colors duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 ${
+                          config.emailEnabled ? "bg-primary" : "bg-border-soft"
+                        }`}
+                      >
+                        <span
+                          className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow-sm transition-transform duration-200 ${
+                            config.emailEnabled ? "translate-x-6" : "translate-x-1"
+                          }`}
+                        />
+                      </button>
+                    </div>
                   </div>
-                  <p className="text-sm leading-7 text-text-muted">
-                    Sobald ein Check-In ausbleibt, werden Push und E-Mail gleichzeitig an die Halterin oder den Halter gesendet.
+                  <p className="mt-3 text-sm leading-7 text-text-muted">
+                    {config.pushEnabled && config.emailEnabled
+                      ? "Push und E-Mail werden gleichzeitig gesendet."
+                      : config.pushEnabled
+                        ? "Nur Push-Benachrichtigungen aktiv."
+                        : "Nur E-Mail-Benachrichtigungen aktiv."}
                   </p>
+                  {!config.pushEnabled && !config.emailEnabled ? null : (
+                    <p className="mt-1 text-xs text-text-subtle">
+                      Mindestens ein Kanal muss aktiv bleiben.
+                    </p>
+                  )}
                 </div>
 
                 <div className="rounded-[22px] bg-warning-soft p-5">
@@ -189,8 +220,7 @@ export function CheckInPage() {
                 {formatCheckInTime(config.nextScheduledAt)}
               </p>
               <p className="mt-3 text-sm leading-7 text-text-muted">
-                Aktiv: {getCheckInMethodLabel(config.primaryMethod)} und{" "}
-                {getCheckInMethodLabel(config.backupMethod)} parallel.
+                Aktiv: {getActiveChannelsLabel(config.pushEnabled, config.emailEnabled)}.
               </p>
               {updateCheckInConfigMutation.error ? (
                 <p className="mt-3 text-sm font-semibold text-danger">

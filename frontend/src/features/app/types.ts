@@ -44,13 +44,11 @@ export type EmergencyChainContact = EmergencyContact & {
   priority: number;
 };
 
-export type NotificationMethod = "push" | "email";
-
 export type CheckInConfig = {
   intervalHours: 6 | 8 | 12 | 24;
   escalationDelayMinutes: 15 | 30 | 60 | 120;
-  primaryMethod: NotificationMethod;
-  backupMethod: NotificationMethod;
+  pushEnabled: boolean;
+  emailEnabled: boolean;
   nextScheduledAt: string;
 };
 

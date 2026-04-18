@@ -132,13 +132,29 @@ Backend tests (`conftest.py`) create a **temporary PostgreSQL database** per ses
 - **EscalationStatusCard**: embeds acknowledge action + deadline countdown via `formatDeadlineCountdown` helper
 - **Check-in page** (`check-in-page.tsx`): shows event history + escalation history + notification history below config
 
+## Notification Preferences (Phase 2)
+
+### Backend
+- **CheckInConfig model** has `push_enabled` (bool, default True) and `email_enabled` (bool, default True) with CHECK constraint ensuring at least one channel is active
+- **Migration**: `alembic/versions/0009_notification_prefs.py` — drops old `primary_method`/`backup_method` columns, adds boolean toggles
+- **Schemas**: `CheckInConfigDTO` and `CheckInConfigUpdateRequest` use `pushEnabled`/`emailEnabled` (camelCase aliases)
+- **Dispatcher**: `_send_pending_notifications()` only creates push logs when `push_enabled`, only sends emails when `email_enabled`. Emergency contact escalation emails always send.
+- **Acknowledge**: `acknowledge_check_in()` uses `"push"` as missed event method when `push_enabled`, else `"email"`
+- **Email template**: `build_reminder_email()` conditionally includes push notification note via `include_push_note` kwarg
+- **Registration**: default config has both channels enabled
+
+### Frontend
+- **CheckInConfig type**: `pushEnabled`/`emailEnabled` booleans (replaces old `primaryMethod`/`backupMethod` strings)
+- **Check-in page** (`check-in-page.tsx`): toggle switches with last-channel protection (can't disable both)
+- **Channel summary**: `getActiveChannelsLabel()` helper in `view-model.ts`
+
 ## Notification Engine (Phase 6)
 
 ### Backend
 - **Scheduler**: APScheduler `BackgroundScheduler` in `app/services/scheduler.py`, runs every 60s, starts/stops with FastAPI lifespan
 - **Dispatcher** (`app/services/notification_dispatcher.py`):
-  - PENDING state → creates a simulated owner push log and sends owner reminder email in the same cycle
-  - ESCALATED state → creates/uses active escalation, emails owner immediately, then emails emergency contacts sequentially in priority order (5-min gap)
+  - PENDING state → conditionally creates simulated owner push log (if `push_enabled`) and/or sends owner reminder email (if `email_enabled`) in the same cycle
+  - ESCALATED state → creates/uses active escalation, emails owner immediately, then emails emergency contacts sequentially in priority order (5-min gap). Emergency contact emails always send regardless of channel preferences.
   - Contact escalation emails must contain the public responder link (`/s/{token}`)
 - **Email service** (`app/services/email.py`): SMTP via Python stdlib (`smtplib`), plain text emails, German templates
 - **NotificationLog model** in `app/db/models.py` — includes `channel` (`push` or `email`) plus semantic types (`owner_reminder`, `owner_escalation`, `emergency_contact_escalation`, `responder_acknowledgment`)
