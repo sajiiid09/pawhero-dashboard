@@ -12,6 +12,11 @@ from app.db.models import (
 from app.db.session import get_session_factory
 from app.repositories.emergency_chain import list_ordered_contacts
 from app.services.notification_dispatcher import CONTACT_NOTIFY_GAP, dispatch_notifications
+from app.services.push import PushResult
+
+
+def _fake_push_success(*args, **kwargs):
+    return PushResult(success_count=1, failure_count=0)
 
 
 def _reset_notification_flow_state(session) -> None:
@@ -29,6 +34,9 @@ def test_pending_dispatch_creates_push_and_email_once(monkeypatch, test_database
         deliveries.append((to, subject, body))
 
     monkeypatch.setattr("app.services.notification_dispatcher.send_email", fake_send_email)
+    monkeypatch.setattr(
+        "app.services.notification_dispatcher.send_push_to_owner", _fake_push_success
+    )
 
     session = get_session_factory()()
     try:
@@ -72,6 +80,9 @@ def test_escalation_dispatch_emails_owner_then_contacts_with_public_link(
         deliveries.append((to, subject, body))
 
     monkeypatch.setattr("app.services.notification_dispatcher.send_email", fake_send_email)
+    monkeypatch.setattr(
+        "app.services.notification_dispatcher.send_push_to_owner", _fake_push_success
+    )
 
     session = get_session_factory()()
     try:
@@ -104,7 +115,11 @@ def test_escalation_dispatch_emails_owner_then_contacts_with_public_link(
             if log.notification_type == NotificationType.EMERGENCY_CONTACT_ESCALATION
         ]
 
-        assert len(owner_alerts) == 1
+        # Email + push owner alerts.
+        assert len(owner_alerts) == 2
+        channels = [log.channel for log in owner_alerts]
+        assert "email" in channels
+        assert "push" in channels
         assert len(contact_alerts) == 1
         assert deliveries[0][0] == "demo@pfoten-held.de"
         assert deliveries[1][0] == expected_first_email
@@ -162,6 +177,9 @@ def test_public_acknowledgment_logs_owner_notification(client, auth_headers, mon
 
     monkeypatch.setattr("app.services.notification_dispatcher.send_email", fake_send_email)
     monkeypatch.setattr("app.api.routes.public.send_email", fake_send_email)
+    monkeypatch.setattr(
+        "app.services.notification_dispatcher.send_push_to_owner", _fake_push_success
+    )
 
     session = get_session_factory()()
     try:
@@ -216,6 +234,9 @@ def test_pending_dispatch_respects_push_disabled(monkeypatch, test_database_url:
         deliveries.append((to, subject, body))
 
     monkeypatch.setattr("app.services.notification_dispatcher.send_email", fake_send_email)
+    monkeypatch.setattr(
+        "app.services.notification_dispatcher.send_push_to_owner", _fake_push_success
+    )
 
     session = get_session_factory()()
     try:
@@ -262,6 +283,9 @@ def test_pending_dispatch_respects_email_disabled(monkeypatch, test_database_url
         deliveries.append((to, subject, body))
 
     monkeypatch.setattr("app.services.notification_dispatcher.send_email", fake_send_email)
+    monkeypatch.setattr(
+        "app.services.notification_dispatcher.send_push_to_owner", _fake_push_success
+    )
 
     session = get_session_factory()()
     try:

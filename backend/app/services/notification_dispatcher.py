@@ -26,6 +26,7 @@ from app.services.email import (
     build_reminder_email,
     send_email,
 )
+from app.services.push import send_push_to_owner
 
 logger = logging.getLogger(__name__)
 
@@ -73,13 +74,28 @@ def _send_pending_notifications(session: Session, config: CheckInConfig) -> None
         )
         is None
     ):
+        settings = get_settings()
+        push_result = send_push_to_owner(
+            session,
+            config.owner_id,
+            title="Check-In erforderlich",
+            body="Bitte bestaetige jetzt, dass alles in Ordnung ist.",
+            url="/check-in",
+        )
+        push_status = "sent" if push_result.success_count > 0 else "failed"
+        push_error = (
+            None
+            if push_result.success_count > 0
+            else "Keine aktiven Push-Abonnements oder Zustellung fehlgeschlagen."
+        )
         _log_notification(
             session,
             owner_id=config.owner_id,
             recipient_email=owner.email,
             channel=NotificationChannel.PUSH,
             notification_type=NotificationType.OWNER_REMINDER,
-            status="sent",
+            status=push_status,
+            error_message=push_error,
         )
         did_change = True
 
@@ -155,6 +171,28 @@ def _send_escalation_alerts(
                 body=body,
             )
             did_change = True
+
+            if config.push_enabled:
+                push_result = send_push_to_owner(
+                    session,
+                    config.owner_id,
+                    title="Eskalation aktiv",
+                    body=(
+                        f"Check-In fuer {primary_pet.name} wurde verpasst. Notfallkette gestartet."
+                    ),
+                    url="/dashboard",
+                )
+                push_status = "sent" if push_result.success_count > 0 else "failed"
+                _log_notification(
+                    session,
+                    owner_id=config.owner_id,
+                    escalation_event_id=active_escalation.id,
+                    recipient_email=owner.email,
+                    channel=NotificationChannel.PUSH,
+                    notification_type=NotificationType.OWNER_ESCALATION,
+                    status=push_status,
+                )
+                did_change = True
 
     contacts = list_ordered_contacts(session, config.owner_id)
     if not contacts or primary_pet is None or public_profile_url is None:

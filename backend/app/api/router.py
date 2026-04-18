@@ -11,6 +11,7 @@ from app.api.routes import (
     notifications,
     pets,
     public,
+    push,
 )
 
 api_router = APIRouter()
@@ -24,3 +25,4 @@ api_router.include_router(emergency_chain.router)
 api_router.include_router(check_in.router)
 api_router.include_router(emergency_profile.router)
 api_router.include_router(notifications.router)
+api_router.include_router(push.router)

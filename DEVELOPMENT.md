@@ -7,17 +7,18 @@
 - Complete demo flow: simulated owner push + owner email on pending, owner escalation email, sequential emergency-contact escalation emails with public link, responder acknowledgment email back to owner.
 - **Phase 1 (Storage Foundation)**: Supabase Storage integration, pet image upload, pet document CRUD with signed URL downloads, frontend document management UI.
 - **Phase 2 (Notification Preferences)**: Toggle switches for push/email channels, conditional notification dispatch per channel, last-channel protection, updated schemas and migration.
+- **Phase 3 (Real Browser Push)**: VAPID-based Web Push, PushSubscription persistence, service worker, PWA manifest, PushNotificationsCard with device management, real push delivery from dispatcher, auto-revocation of expired subscriptions.
 
 ## Current Behavior
 
 - Scheduler runs every 60s.
-- Pending overdue cycle conditionally logs `push` (if `push_enabled`) and/or sends `email` (if `email_enabled`) for the owner.
-- Escalation emails the owner immediately, then emergency contacts in priority order with a 5-minute gap. Emergency contact emails always send regardless of channel preferences.
+- Pending overdue cycle conditionally sends real Web Push (if `push_enabled`, via VAPID to active browser subscriptions) and/or sends `email` (if `email_enabled`) for the owner.
+- Escalation sends push + email to owner immediately, then emergency contacts in priority order with a 5-minute gap. Emergency contact emails always send regardless of channel preferences.
 - Public responder flow uses `/s/{token}` and updates owner-facing status after acknowledgment.
+- Push notification click opens `/dashboard` or `/check-in` depending on notification type.
 
 ## Deferred
 
-- Real push delivery provider.
 - SMS / multi-provider notification delivery.
 - Production-grade live updates beyond polling.
 - More advanced escalation branching or per-pet escalation configuration.

@@ -8,6 +8,9 @@ import type {
   Pet,
   PetDocumentItem,
   PetInput,
+  PushSubscriptionInput,
+  PushSubscriptionItem,
+  TestPushResult,
 } from "@/features/app/types";
 import type {
   CheckInStatusResponse,
@@ -176,4 +179,30 @@ export function getPetDocumentDownloadUrl(petId: string, documentId: string) {
   return apiRequest<{ url: string }>(
     `/pets/${petId}/documents/${documentId}/download`,
   );
+}
+
+export function getVapidPublicKey() {
+  return apiRequest<{ publicKey: string }>("/push/vapid-public-key");
+}
+
+export function getPushSubscriptions() {
+  return apiRequest<PushSubscriptionItem[]>("/push/subscriptions");
+}
+
+export function savePushSubscription(input: PushSubscriptionInput) {
+  return apiRequest<PushSubscriptionItem>("/push/subscriptions", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+}
+
+export function revokePushSubscription(input: PushSubscriptionInput) {
+  return apiRequest<void>("/push/subscriptions", {
+    method: "DELETE",
+    body: JSON.stringify(input),
+  });
+}
+
+export function sendTestPush() {
+  return apiRequest<TestPushResult>("/push/test", { method: "POST" });
 }

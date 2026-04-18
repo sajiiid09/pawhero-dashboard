@@ -148,13 +148,41 @@ Backend tests (`conftest.py`) create a **temporary PostgreSQL database** per ses
 - **Check-in page** (`check-in-page.tsx`): toggle switches with last-channel protection (can't disable both)
 - **Channel summary**: `getActiveChannelsLabel()` helper in `view-model.ts`
 
+## Real Browser Push Notifications (Phase 3)
+
+### Backend
+- **PushSubscription model** in `app/db/models.py` — id, owner_id, endpoint, p256dh, auth, user_agent, last_seen_at, revoked_at; unique constraint on endpoint, index on (owner_id, revoked_at)
+- **Migration**: `alembic/versions/0010_push_subscriptions.py`
+- **VAPID config**: `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT` env vars in Settings
+- **Dependency**: `pywebpush>=2.0.0`
+- **Push service** (`app/services/push.py`): `send_push_to_owner()` sends real Web Push via VAPID to all active subscriptions; auto-revokes on 410/404; returns PushResult with success/failure counts
+- **Push repository** (`app/repositories/push.py`): upsert by endpoint (idempotent), list active, revoke, mark_revoked
+- **Push schemas** (`app/schemas/push.py`): SavePushSubscriptionRequest, PushSubscriptionDTO, TestPushResultDTO
+- **Endpoints** (`app/api/routes/push.py`):
+  - `GET /push/vapid-public-key` — returns public key (no auth required)
+  - `GET /push/subscriptions` — list active subscriptions (auth)
+  - `POST /push/subscriptions` — save browser subscription (auth)
+  - `DELETE /push/subscriptions` — revoke by endpoint (auth)
+  - `POST /push/test` — send test notification (auth)
+- **Dispatcher updated**: `_send_pending_notifications` and `_send_escalation_alerts` now call `send_push_to_owner()` for real push delivery when `push_enabled=true`; logs push success/failure in NotificationLog
+
+### Frontend
+- **PWA manifest**: `src/app/manifest.ts` — name, short_name, icons (192x192, 512x512), display standalone, theme color
+- **Root layout**: `appleWebApp` and `icons` metadata added; `viewport` with `themeColor`
+- **Service worker**: `public/sw.js` — handles `push` event (shows notification), `notificationclick` (opens/focuses URL)
+- **Icons**: `public/icon-192.png`, `public/icon-512.png`, `public/apple-icon.png` generated from logo
+- **Push types**: `PushSubscriptionItem`, `PushSubscriptionInput`, `TestPushResult` in types.ts
+- **Push hooks**: `useVapidPublicKeyQuery`, `usePushSubscriptionsQuery`, `useSavePushSubscriptionMutation`, `useRevokePushSubscriptionMutation`, `useSendTestPushMutation`
+- **PushNotificationsCard** in `features/check-in/components/` — detects browser support, iOS Home Screen requirement, permission states; register/unsubscribe/test push flows
+- **Check-in page**: PushNotificationsCard replaces risk-profile card
+
 ## Notification Engine (Phase 6)
 
 ### Backend
 - **Scheduler**: APScheduler `BackgroundScheduler` in `app/services/scheduler.py`, runs every 60s, starts/stops with FastAPI lifespan
 - **Dispatcher** (`app/services/notification_dispatcher.py`):
   - PENDING state → conditionally creates simulated owner push log (if `push_enabled`) and/or sends owner reminder email (if `email_enabled`) in the same cycle
-  - ESCALATED state → creates/uses active escalation, emails owner immediately, then emails emergency contacts sequentially in priority order (5-min gap). Emergency contact emails always send regardless of channel preferences.
+  - ESCALATED state → conditionally sends real push to owner (if `push_enabled`), emails owner immediately, then emails emergency contacts sequentially in priority order (5-min gap). Emergency contact emails always send regardless of channel preferences.
   - Contact escalation emails must contain the public responder link (`/s/{token}`)
 - **Email service** (`app/services/email.py`): SMTP via Python stdlib (`smtplib`), plain text emails, German templates
 - **NotificationLog model** in `app/db/models.py` — includes `channel` (`push` or `email`) plus semantic types (`owner_reminder`, `owner_escalation`, `emergency_contact_escalation`, `responder_acknowledgment`)

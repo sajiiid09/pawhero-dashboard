@@ -12,4 +12,6 @@ export const appQueryKeys = {
   notifications: ["notifications"] as const,
   emergencyProfile: (petId: string) => ["emergency-profile", petId] as const,
   emergencyProfileRoot: ["emergency-profile"] as const,
+  vapidPublicKey: ["vapid-public-key"] as const,
+  pushSubscriptions: ["push-subscriptions"] as const,
 };

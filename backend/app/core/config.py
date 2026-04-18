@@ -47,6 +47,12 @@ class Settings(BaseSettings):
         default="", validation_alias=AliasChoices("SUPABASE_PUBLISHABLE_KEY")
     )
 
+    vapid_public_key: str = Field(default="", validation_alias=AliasChoices("VAPID_PUBLIC_KEY"))
+    vapid_private_key: str = Field(default="", validation_alias=AliasChoices("VAPID_PRIVATE_KEY"))
+    vapid_subject: str = Field(
+        default="mailto:support@pfoten-held.de", validation_alias=AliasChoices("VAPID_SUBJECT")
+    )
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",

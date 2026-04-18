@@ -1,6 +1,6 @@
 "use client";
 
-import { BellRing, ShieldAlert } from "lucide-react";
+import { BellRing } from "lucide-react";
 
 import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
@@ -19,6 +19,7 @@ import type { CheckInHistoryItem } from "@/features/dashboard/types";
 import { formatCheckInTime, getActiveChannelsLabel } from "@/features/dashboard/view-model";
 import { EscalationHistoryCard } from "@/features/check-in/components/escalation-history-card";
 import { NotificationHistoryCard } from "@/features/check-in/components/notification-history-card";
+import { PushNotificationsCard } from "@/features/check-in/components/push-notifications-card";
 
 const intervalOptions = [6, 8, 12, 24] as const;
 const escalationOptions = [15, 30, 60, 120] as const;
@@ -194,19 +195,7 @@ export function CheckInPage() {
                   )}
                 </div>
 
-                <div className="rounded-[22px] bg-warning-soft p-5">
-                  <div className="flex items-center gap-2 text-warning">
-                    <ShieldAlert className="h-4 w-4" />
-                    <p className="text-sm font-bold uppercase tracking-[0.12em]">
-                      Risiko-Profil
-                    </p>
-                  </div>
-                  <p className="mt-4 text-sm leading-7 text-text-muted">
-                    {config.intervalHours <= 8
-                      ? "Hohe Aufmerksamkeit mit enger Taktung. Mehr Sicherheit, aber haeufigere Rueckmeldungen."
-                      : "Ausgewogene Konfiguration fuer regelmaessige Sicherheit ohne zu viele Unterbrechungen."}
-                  </p>
-                </div>
+                <PushNotificationsCard />
               </div>
             </div>
           </section>

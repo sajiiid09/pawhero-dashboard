@@ -23,12 +23,17 @@ import {
   getNotificationLogs,
   getPetDocumentDownloadUrl,
   getPublicEmergencyProfile,
+  getPushSubscriptions,
+  getVapidPublicKey,
   getPet,
   getPets,
   listPetDocuments,
   moveEmergencyContact,
+  revokePushSubscription,
   saveEmergencyContact,
   savePet,
+  savePushSubscription,
+  sendTestPush,
   updateCheckInConfig,
   uploadPetDocument,
   uploadPetImage,
@@ -40,6 +45,7 @@ import type {
   EmergencyContactInput,
   MoveDirection,
   PetInput,
+  PushSubscriptionInput,
 } from "@/features/app/types";
 
 export function useDashboardSummaryQuery() {
@@ -334,6 +340,48 @@ export function useDownloadPetDocument(petId: string) {
         window.open(data.url, "_blank");
       }
     },
+  });
+}
+
+export function useVapidPublicKeyQuery() {
+  return useQuery({
+    queryKey: appQueryKeys.vapidPublicKey,
+    queryFn: getVapidPublicKey,
+  });
+}
+
+export function usePushSubscriptionsQuery() {
+  return useQuery({
+    queryKey: appQueryKeys.pushSubscriptions,
+    queryFn: getPushSubscriptions,
+  });
+}
+
+export function useSavePushSubscriptionMutation() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (input: PushSubscriptionInput) => savePushSubscription(input),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: appQueryKeys.pushSubscriptions });
+    },
+  });
+}
+
+export function useRevokePushSubscriptionMutation() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (input: PushSubscriptionInput) => revokePushSubscription(input),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: appQueryKeys.pushSubscriptions });
+    },
+  });
+}
+
+export function useSendTestPushMutation() {
+  return useMutation({
+    mutationFn: sendTestPush,
   });
 }
 

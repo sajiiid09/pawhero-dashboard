@@ -4,7 +4,17 @@ from datetime import datetime
 from enum import StrEnum
 
 import sqlalchemy as sa
-from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Integer, String, Text, UniqueConstraint
+from sqlalchemy import (
+    Boolean,
+    DateTime,
+    Float,
+    ForeignKey,
+    Index,
+    Integer,
+    String,
+    Text,
+    UniqueConstraint,
+)
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
 
@@ -83,6 +93,10 @@ class Owner(Base):
         cascade="all, delete-orphan",
     )
     pet_documents: Mapped[list[PetDocument]] = relationship(
+        back_populates="owner",
+        cascade="all, delete-orphan",
+    )
+    push_subscriptions: Mapped[list[PushSubscription]] = relationship(
         back_populates="owner",
         cascade="all, delete-orphan",
     )
@@ -271,3 +285,24 @@ class PetDocument(TimestampMixin, Base):
 
     owner: Mapped[Owner] = relationship(back_populates="pet_documents")
     pet: Mapped[Pet] = relationship(back_populates="documents")
+
+
+class PushSubscription(TimestampMixin, Base):
+    __tablename__ = "push_subscriptions"
+    __table_args__ = (
+        UniqueConstraint("endpoint", name="uq_push_sub_endpoint"),
+        Index("ix_push_sub_owner_active", "owner_id", "revoked_at"),
+    )
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    owner_id: Mapped[str] = mapped_column(
+        ForeignKey("owners.id", ondelete="CASCADE"), nullable=False
+    )
+    endpoint: Mapped[str] = mapped_column(Text, nullable=False)
+    p256dh: Mapped[str] = mapped_column(String(255), nullable=False)
+    auth: Mapped[str] = mapped_column(String(255), nullable=False)
+    user_agent: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    last_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    owner: Mapped[Owner] = relationship(back_populates="push_subscriptions")

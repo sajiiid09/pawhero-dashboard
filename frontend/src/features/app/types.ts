@@ -93,3 +93,23 @@ export type PetDocumentItem = {
   isPublic: boolean;
   createdAt: string;
 };
+
+export type PushSubscriptionItem = {
+  id: string;
+  endpoint: string;
+  userAgent: string | null;
+  createdAt: string;
+  lastSeenAt: string;
+};
+
+export type PushSubscriptionInput = {
+  endpoint: string;
+  p256dh: string;
+  auth: string;
+  userAgent?: string | null;
+};
+
+export type TestPushResult = {
+  successCount: number;
+  failureCount: number;
+};
