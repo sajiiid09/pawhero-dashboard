@@ -10,9 +10,9 @@ import type {
   PetInput,
   PublicCheckInAckResponse,
   PublicCheckInStatus,
+  PushPreviewResult,
   PushSubscriptionInput,
   PushSubscriptionItem,
-  TestPushResult,
 } from "@/features/app/types";
 import type {
   CheckInStatusResponse,
@@ -205,8 +205,8 @@ export function revokePushSubscription(input: PushSubscriptionInput) {
   });
 }
 
-export function sendTestPush() {
-  return apiRequest<TestPushResult>("/push/test", { method: "POST" });
+export function sendPushPreview() {
+  return apiRequest<PushPreviewResult>("/push/preview", { method: "POST" });
 }
 
 export function getPublicCheckInStatus(token: string) {

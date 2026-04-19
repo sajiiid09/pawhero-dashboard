@@ -109,7 +109,7 @@ export type PushSubscriptionInput = {
   userAgent?: string | null;
 };
 
-export type TestPushResult = {
+export type PushPreviewResult = {
   successCount: number;
   failureCount: number;
 };

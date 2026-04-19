@@ -6,7 +6,6 @@ import { PageHeader } from "@/components/page-header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { MotionPage, MotionSection } from "@/components/ui/motion";
 import { useDashboardSummaryQuery } from "@/features/app/hooks";
-import { ActiveMonitoringCard } from "@/features/dashboard/components/active-monitoring-card";
 import { CheckInHistorySection } from "@/features/dashboard/components/check-in-history-section";
 import { DashboardShellSkeleton } from "@/features/dashboard/components/dashboard-shell-skeleton";
 import { EscalationStatusCard } from "@/features/dashboard/components/escalation-status-card";
@@ -76,7 +75,6 @@ export function DashboardPageClient() {
           <CheckInHistorySection items={summary.recentCheckIns} />
           <div className="space-y-4">
             <EscalationStatusCard escalationStatus={summary.escalationStatus} />
-            <ActiveMonitoringCard monitoredPet={summary.monitoredPet} />
           </div>
         </section>
       </MotionSection>

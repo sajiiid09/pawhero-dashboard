@@ -18,6 +18,6 @@ class PushSubscriptionDTO(AppSchema):
     last_seen_at: str = Field(alias="lastSeenAt")
 
 
-class TestPushResultDTO(AppSchema):
+class PushPreviewResultDTO(AppSchema):
     success_count: int = Field(alias="successCount")
     failure_count: int = Field(alias="failureCount")

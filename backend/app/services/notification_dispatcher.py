@@ -31,7 +31,7 @@ from app.services.push import send_push_to_owner
 
 logger = logging.getLogger(__name__)
 
-CONTACT_NOTIFY_GAP = timedelta(minutes=5)
+CONTACT_NOTIFY_GAP = timedelta(minutes=30)
 
 
 def dispatch_notifications(session: Session) -> None:

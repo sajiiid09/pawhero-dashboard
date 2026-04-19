@@ -22,7 +22,7 @@ import { NotificationHistoryCard } from "@/features/check-in/components/notifica
 import { PushNotificationsCard } from "@/features/check-in/components/push-notifications-card";
 
 const intervalOptions = [6, 8, 12, 24] as const;
-const escalationOptions = [15, 30, 60, 120] as const;
+const escalationOptions = [15, 30] as const;
 
 export function CheckInPage() {
   const { data: config, error, isLoading } = useCheckInConfigQuery();

@@ -1,6 +1,6 @@
 "use client";
 
-import { Bell, BellOff, Smartphone, TestTube } from "lucide-react";
+import { Bell, BellOff, BellRing, Smartphone } from "lucide-react";
 import { type JSX, useCallback, useMemo, useState } from "react";
 
 import { Badge } from "@/components/ui/badge";
@@ -9,7 +9,7 @@ import {
   usePushSubscriptionsQuery,
   useRevokePushSubscriptionMutation,
   useSavePushSubscriptionMutation,
-  useSendTestPushMutation,
+  useSendPushPreviewMutation,
   useVapidPublicKeyQuery,
 } from "@/features/app/hooks";
 import { useHydrated } from "@/lib/use-hydrated";
@@ -51,7 +51,7 @@ export function PushNotificationsCard() {
   const { data: subscriptions } = usePushSubscriptionsQuery();
   const saveSubscription = useSavePushSubscriptionMutation();
   const revokeSubscription = useRevokePushSubscriptionMutation();
-  const testPush = useSendTestPushMutation();
+  const pushPreview = useSendPushPreviewMutation();
 
   const [localPushState, setLocalPushState] = useState<PushState | null>(null);
   const [localError, setLocalError] = useState<string | null>(null);
@@ -129,13 +129,13 @@ export function PushNotificationsCard() {
     }
   }, [subscriptions, revokeSubscription]);
 
-  const handleTestPush = useCallback(async () => {
+  const handlePushPreview = useCallback(async () => {
     try {
-      await testPush.mutateAsync();
+      await pushPreview.mutateAsync();
     } catch {
-      setLocalError("Test-Push konnte nicht gesendet werden.");
+      setLocalError("Push-Benachrichtigung konnte nicht gesendet werden.");
     }
-  }, [testPush]);
+  }, [pushPreview]);
 
   if (!hydrated) {
     return (
@@ -194,11 +194,11 @@ export function PushNotificationsCard() {
           <Button
             variant="secondary"
             size="sm"
-            onClick={handleTestPush}
-            disabled={testPush.isPending}
+            onClick={handlePushPreview}
+            disabled={pushPreview.isPending}
           >
-            <TestTube className="mr-1 h-3.5 w-3.5" />
-            Test-Push senden
+            <BellRing className="mr-1 h-3.5 w-3.5" />
+            Push-Benachrichtigung senden
           </Button>
         </div>
       </div>
@@ -232,10 +232,10 @@ export function PushNotificationsCard() {
       {localError && (
         <p className="mt-3 text-sm font-semibold text-danger">{localError}</p>
       )}
-      {testPush.isSuccess && testPush.data && (
+      {pushPreview.isSuccess && pushPreview.data && (
         <p className="mt-2 text-sm text-success">
-          Test-Push gesendet ({testPush.data.successCount} erfolgreich,{" "}
-          {testPush.data.failureCount} fehlgeschlagen).
+          Push-Benachrichtigung gesendet ({pushPreview.data.successCount} erfolgreich,{" "}
+          {pushPreview.data.failureCount} fehlgeschlagen).
         </p>
       )}
     </div>

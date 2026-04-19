@@ -3,9 +3,9 @@ from fastapi import APIRouter, HTTPException, status
 from app.api.dependencies import DbSession, OwnerId
 from app.core.config import get_settings
 from app.schemas.push import (
+    PushPreviewResultDTO,
     PushSubscriptionDTO,
     SavePushSubscriptionRequest,
-    TestPushResultDTO,
 )
 from app.services import push as push_service
 
@@ -56,6 +56,6 @@ def revoke_push_subscription(
     session.commit()
 
 
-@router.post("/test", response_model=TestPushResultDTO)
-def send_test_push(session: DbSession, owner_id: OwnerId) -> TestPushResultDTO:
-    return push_service.send_test_push(session, owner_id)
+@router.post("/preview", response_model=PushPreviewResultDTO)
+def send_push_preview(session: DbSession, owner_id: OwnerId) -> PushPreviewResultDTO:
+    return push_service.send_push_preview(session, owner_id)

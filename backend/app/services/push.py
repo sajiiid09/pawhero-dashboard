@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 from app.core.config import get_settings
 from app.db.models import PushSubscription
 from app.repositories import push as push_repo
-from app.schemas.push import PushSubscriptionDTO, TestPushResultDTO
+from app.schemas.push import PushPreviewResultDTO, PushSubscriptionDTO
 from app.services.auth import generate_id
 
 logger = logging.getLogger(__name__)
@@ -110,15 +110,15 @@ def send_push_to_owner(
     return PushResult(success_count=success, failure_count=failure)
 
 
-def send_test_push(session: Session, owner_id: str) -> TestPushResultDTO:
+def send_push_preview(session: Session, owner_id: str) -> PushPreviewResultDTO:
     result = send_push_to_owner(
         session,
         owner_id,
-        title="Pfoten-Held Test",
-        body="Das ist eine Test-Push-Nachricht.",
+        title="Check-In Erinnerung",
+        body="Bitte bestaetige jetzt im Dashboard, dass alles in Ordnung ist.",
         url="/check-in",
     )
-    return TestPushResultDTO(
+    return PushPreviewResultDTO(
         success_count=result.success_count,
         failure_count=result.failure_count,
     )

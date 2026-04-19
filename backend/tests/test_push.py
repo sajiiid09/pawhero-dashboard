@@ -97,13 +97,13 @@ def test_push_subscription_revoke_not_found(client, auth_headers):
     assert revoke_response.status_code == status.HTTP_404_NOT_FOUND
 
 
-def test_test_push_endpoint_returns_result(client, auth_headers, monkeypatch):
+def test_push_preview_endpoint_returns_result(client, auth_headers, monkeypatch):
     def fake_send(*args, **kwargs):
         return PushResult(success_count=1, failure_count=0)
 
     monkeypatch.setattr("app.services.push.send_push_to_owner", fake_send)
 
-    response = client.post("/push/test", headers=auth_headers)
+    response = client.post("/push/preview", headers=auth_headers)
     assert response.status_code == status.HTTP_200_OK
     data = response.json()
     assert data["successCount"] == 1

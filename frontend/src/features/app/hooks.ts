@@ -35,7 +35,7 @@ import {
   saveEmergencyContact,
   savePet,
   savePushSubscription,
-  sendTestPush,
+  sendPushPreview,
   updateCheckInConfig,
   uploadPetDocument,
   uploadPetImage,
@@ -381,9 +381,9 @@ export function useRevokePushSubscriptionMutation() {
   });
 }
 
-export function useSendTestPushMutation() {
+export function useSendPushPreviewMutation() {
   return useMutation({
-    mutationFn: sendTestPush,
+    mutationFn: sendPushPreview,
   });
 }
 
