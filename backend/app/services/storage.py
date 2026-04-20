@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import logging
 import uuid
-from io import BytesIO
 
 from supabase import Client, create_client
 
@@ -66,7 +65,7 @@ def upload_image(pet_id: str, file_bytes: bytes, content_type: str) -> str:
     client = _get_client()
     client.storage.from_(IMAGES_BUCKET).upload(
         path=storage_key,
-        file=BytesIO(file_bytes),
+        file=file_bytes,
         file_options={"content-type": content_type},
     )
 
@@ -92,7 +91,7 @@ def upload_document(pet_id: str, file_bytes: bytes, content_type: str, doc_id: s
     client = _get_client()
     client.storage.from_(DOCUMENTS_BUCKET).upload(
         path=storage_key,
-        file=BytesIO(file_bytes),
+        file=file_bytes,
         file_options={"content-type": content_type},
     )
 

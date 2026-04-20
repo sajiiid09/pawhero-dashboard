@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import io
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 from fastapi import status
 
@@ -363,6 +363,65 @@ def test_delete_pet_cleans_up_storage(client, auth_headers):
 
 
 # --- Storage service unit tests ---
+
+
+def test_upload_image_passes_raw_bytes_to_supabase():
+    """Supabase storage3 expects raw bytes, not BytesIO."""
+    file_bytes = b"\xff\xd8image-data"
+    upload = Mock()
+    bucket = Mock(upload=upload)
+    storage = Mock()
+    storage.from_.return_value = bucket
+    client = Mock(storage=storage)
+
+    with (
+        patch.object(storage_module, "_get_client", return_value=client),
+        patch.object(
+            storage_module,
+            "_get_public_url_base",
+            return_value="https://cdn.example.com/storage/v1/object/public/pet-images",
+        ),
+    ):
+        public_url = storage_module.upload_image("pet-123", file_bytes, "image/jpeg")
+
+    storage.from_.assert_called_once_with(storage_module.IMAGES_BUCKET)
+    upload.assert_called_once()
+    upload_kwargs = upload.call_args.kwargs
+    assert upload_kwargs["file"] == file_bytes
+    assert isinstance(upload_kwargs["file"], bytes)
+    assert upload_kwargs["file_options"] == {"content-type": "image/jpeg"}
+    assert upload_kwargs["path"].startswith("pets/pet-123/")
+    assert upload_kwargs["path"].endswith(".jpg")
+    assert public_url == (
+        "https://cdn.example.com/storage/v1/object/public/pet-images/"
+        f"{upload_kwargs['path']}"
+    )
+
+
+def test_upload_document_passes_raw_bytes_to_supabase():
+    """Document uploads must also pass raw bytes and preserve the content type."""
+    file_bytes = b"%PDF-1.4 document-data"
+    upload = Mock()
+    bucket = Mock(upload=upload)
+    storage = Mock()
+    storage.from_.return_value = bucket
+    client = Mock(storage=storage)
+
+    with patch.object(storage_module, "_get_client", return_value=client):
+        storage_key = storage_module.upload_document(
+            "pet-123",
+            file_bytes,
+            "application/pdf",
+            "doc-456",
+        )
+
+    storage.from_.assert_called_once_with(storage_module.DOCUMENTS_BUCKET)
+    upload.assert_called_once_with(
+        path="pets/pet-123/doc-456.pdf",
+        file=file_bytes,
+        file_options={"content-type": "application/pdf"},
+    )
+    assert storage_key == "pets/pet-123/doc-456.pdf"
 
 
 def test_validate_image_accepts_jpeg():
