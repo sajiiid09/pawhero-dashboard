@@ -1,7 +1,7 @@
 "use client";
 
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import { ApiError } from "@/lib/api-client";
 import { AuthProvider } from "@/features/auth/auth-context";
@@ -27,6 +27,19 @@ export function AppProviders({ children }: { children: React.ReactNode }) {
         },
       }),
   );
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+    if (!("serviceWorker" in navigator) || !window.isSecureContext) {
+      return;
+    }
+
+    void navigator.serviceWorker.register("/sw.js", { scope: "/" }).catch(() => {
+      // Keep registration failures non-blocking for app startup.
+    });
+  }, []);
 
   return (
     <QueryClientProvider client={queryClient}>

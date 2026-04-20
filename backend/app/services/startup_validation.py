@@ -45,4 +45,11 @@ def _collect_startup_errors(settings: Settings) -> list[str]:
     if not settings.supabase_publishable_key.strip():
         errors.append("SUPABASE_PUBLISHABLE_KEY is required for Supabase project configuration")
 
+    if not settings.vapid_public_key.strip():
+        errors.append("VAPID_PUBLIC_KEY is required for web push")
+    if not settings.vapid_private_key.strip():
+        errors.append("VAPID_PRIVATE_KEY is required for web push")
+    if not settings.vapid_subject.strip():
+        errors.append("VAPID_SUBJECT is required for web push")
+
     return errors

@@ -20,6 +20,7 @@ logger = logging.getLogger(__name__)
 class PushResult:
     success_count: int = 0
     failure_count: int = 0
+    failure_reason: str | None = None
 
 
 def serialize_push_subscription(sub: PushSubscription) -> PushSubscriptionDTO:
@@ -72,11 +73,12 @@ def send_push_to_owner(
 
     if not settings.vapid_private_key or not settings.vapid_public_key:
         logger.warning("VAPID keys not configured, skipping push delivery")
-        return PushResult(failure_count=1)
+        return PushResult(failure_count=1, failure_reason="vapid_not_configured")
 
     subs = push_repo.list_active_subscriptions(session, owner_id)
     if not subs:
-        return PushResult(failure_count=1)
+        logger.info("no active push subscriptions for owner_id=%s", owner_id)
+        return PushResult(failure_count=1, failure_reason="no_active_subscriptions")
 
     payload = json.dumps({"title": title, "body": body, "url": url})
     vapid_claims = {"sub": settings.vapid_subject}
@@ -107,7 +109,13 @@ def send_push_to_owner(
             logger.exception("unexpected push error for sub %s", sub.id)
             failure += 1
 
-    return PushResult(success_count=success, failure_count=failure)
+    failure_reason: str | None = None
+    if success == 0 and failure > 0:
+        failure_reason = "delivery_failed"
+    elif success > 0 and failure > 0:
+        failure_reason = "partial_delivery"
+
+    return PushResult(success_count=success, failure_count=failure, failure_reason=failure_reason)
 
 
 def send_push_preview(session: Session, owner_id: str) -> PushPreviewResultDTO:

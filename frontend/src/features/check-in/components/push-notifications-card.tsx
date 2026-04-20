@@ -1,7 +1,7 @@
 "use client";
 
-import { Bell, BellOff, BellRing, Smartphone } from "lucide-react";
-import { type JSX, useCallback, useMemo, useState } from "react";
+import { Bell, BellOff, BellRing, Download, Smartphone } from "lucide-react";
+import { type JSX, useCallback, useEffect, useMemo, useState } from "react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -23,9 +23,15 @@ type PushState =
   | "subscribed"
   | "error";
 
+interface BeforeInstallPromptEvent extends Event {
+  prompt: () => Promise<void>;
+  userChoice: Promise<{ outcome: "accepted" | "dismissed"; platform: string }>;
+}
+
 function detectPushState(): PushState {
   if (typeof navigator === "undefined") return "unsupported";
   if (!("serviceWorker" in navigator) || !("PushManager" in window)) return "unsupported";
+  if (!("Notification" in window)) return "unsupported";
 
   // iOS requires the app to be added to Home Screen.
   const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
@@ -39,11 +45,15 @@ function detectPushState(): PushState {
   return "default";
 }
 
-function urlBase64ToUint8Array(base64String: string): Uint8Array {
+function urlBase64ToArrayBuffer(base64String: string): ArrayBuffer {
   const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
   const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
   const rawData = globalThis.atob(base64);
-  return Uint8Array.from([...rawData], (char) => char.charCodeAt(0));
+  const output = new Uint8Array(rawData.length);
+  for (let index = 0; index < rawData.length; index += 1) {
+    output[index] = rawData.charCodeAt(index);
+  }
+  return output.buffer;
 }
 
 export function PushNotificationsCard() {
@@ -55,8 +65,35 @@ export function PushNotificationsCard() {
 
   const [localPushState, setLocalPushState] = useState<PushState | null>(null);
   const [localError, setLocalError] = useState<string | null>(null);
+  const [installPromptEvent, setInstallPromptEvent] =
+    useState<BeforeInstallPromptEvent | null>(null);
+  const [isInstallPending, setIsInstallPending] = useState(false);
 
   const hydrated = useHydrated();
+
+  useEffect(() => {
+    if (!hydrated || typeof window === "undefined") {
+      return;
+    }
+
+    const handleBeforeInstallPrompt = (event: Event) => {
+      const promptEvent = event as BeforeInstallPromptEvent;
+      promptEvent.preventDefault();
+      setInstallPromptEvent(promptEvent);
+    };
+
+    const handleAppInstalled = () => {
+      setInstallPromptEvent(null);
+    };
+
+    window.addEventListener("beforeinstallprompt", handleBeforeInstallPrompt);
+    window.addEventListener("appinstalled", handleAppInstalled);
+
+    return () => {
+      window.removeEventListener("beforeinstallprompt", handleBeforeInstallPrompt);
+      window.removeEventListener("appinstalled", handleAppInstalled);
+    };
+  }, [hydrated]);
 
   // Compute push support state only after hydration (needs navigator).
   const pushState: PushState = useMemo(() => {
@@ -77,11 +114,34 @@ export function PushNotificationsCard() {
     setLocalError(null);
 
     try {
-      const registration = await navigator.serviceWorker.register("/sw.js");
-      const subscription = await registration.pushManager.subscribe({
-        userVisibleOnly: true,
-        applicationServerKey: urlBase64ToUint8Array(vapidData.publicKey) as unknown as ArrayBuffer,
-      });
+      if (!("Notification" in window)) {
+        setLocalPushState("unsupported");
+        return;
+      }
+
+      if (Notification.permission === "denied") {
+        setLocalPushState("permission-denied");
+        return;
+      }
+
+      if (Notification.permission !== "granted") {
+        const permission = await Notification.requestPermission();
+        if (permission !== "granted") {
+          setLocalPushState(permission === "denied" ? "permission-denied" : "default");
+          return;
+        }
+      }
+
+      const existingRegistration = await navigator.serviceWorker.getRegistration("/");
+      const registration =
+        existingRegistration ?? (await navigator.serviceWorker.register("/sw.js", { scope: "/" }));
+      const existingSubscription = await registration.pushManager.getSubscription();
+      const subscription =
+        existingSubscription ??
+        (await registration.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: urlBase64ToArrayBuffer(vapidData.publicKey),
+        }));
 
       const keys = subscription.toJSON().keys;
       if (!keys?.p256dh || !keys?.auth) {
@@ -107,6 +167,22 @@ export function PushNotificationsCard() {
       }
     }
   }, [vapidData, saveSubscription]);
+
+  const handleInstallApp = useCallback(async () => {
+    if (!installPromptEvent) return;
+
+    setIsInstallPending(true);
+    setLocalError(null);
+    try {
+      await installPromptEvent.prompt();
+      await installPromptEvent.userChoice;
+      setInstallPromptEvent(null);
+    } catch (err) {
+      setLocalError(err instanceof Error ? err.message : "App-Installation fehlgeschlagen.");
+    } finally {
+      setIsInstallPending(false);
+    }
+  }, [installPromptEvent]);
 
   const handleUnsubscribe = useCallback(async () => {
     if (!subscriptions || subscriptions.length === 0) return;
@@ -150,6 +226,17 @@ export function PushNotificationsCard() {
   }
 
   let content: JSX.Element;
+  const installAction = installPromptEvent ? (
+    <Button
+      variant="secondary"
+      size="sm"
+      onClick={handleInstallApp}
+      disabled={isInstallPending}
+    >
+      <Download className="mr-1 h-3.5 w-3.5" />
+      App installieren
+    </Button>
+  ) : null;
 
   if (pushState === "unsupported") {
     content = (
@@ -200,6 +287,7 @@ export function PushNotificationsCard() {
             <BellRing className="mr-1 h-3.5 w-3.5" />
             Push-Benachrichtigung senden
           </Button>
+          {installAction}
         </div>
       </div>
     );
@@ -218,6 +306,7 @@ export function PushNotificationsCard() {
           <Bell className="mr-1 h-3.5 w-3.5" />
           Push auf diesem Geraet aktivieren
         </Button>
+        {installAction}
       </div>
     );
   }

@@ -2,9 +2,11 @@ import type { MetadataRoute } from "next";
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
+    id: "/",
     name: "Pfoten-Held Dashboard",
     short_name: "Pfoten-Held",
     description: "Dashboard fuer die aktive Ueberwachung und Notfallkette von Haustieren.",
+    scope: "/",
     start_url: "/dashboard",
     display: "standalone",
     background_color: "#ffffff",

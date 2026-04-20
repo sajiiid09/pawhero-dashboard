@@ -27,7 +27,7 @@ from app.services.email import (
     build_reminder_email,
     send_email,
 )
-from app.services.push import send_push_to_owner
+from app.services.push import PushResult, send_push_to_owner
 
 logger = logging.getLogger(__name__)
 
@@ -64,6 +64,7 @@ def _send_pending_notifications(session: Session, config: CheckInConfig) -> None
     cycle_key = config.next_scheduled_at.isoformat()
     settings = get_settings()
     did_change = False
+    raw_token: str | None = None
 
     # Generate the action token once for this cycle so both push and email
     # reference the same token.  Must happen before any notification is sent.
@@ -94,11 +95,7 @@ def _send_pending_notifications(session: Session, config: CheckInConfig) -> None
             url=push_url,
         )
         push_status = "sent" if push_result.success_count > 0 else "failed"
-        push_error = (
-            None
-            if push_result.success_count > 0
-            else "Keine aktiven Push-Abonnements oder Zustellung fehlgeschlagen."
-        )
+        push_error = _build_push_error_message(push_result)
         _log_notification(
             session,
             owner_id=config.owner_id,
@@ -108,6 +105,12 @@ def _send_pending_notifications(session: Session, config: CheckInConfig) -> None
             status=push_status,
             error_message=push_error,
         )
+        if push_status == "failed":
+            logger.warning(
+                "owner reminder push failed owner_id=%s reason=%s",
+                config.owner_id,
+                push_result.failure_reason,
+            )
         did_change = True
 
     if (
@@ -205,6 +208,7 @@ def _send_escalation_alerts(
                     url=push_url,
                 )
                 push_status = "sent" if push_result.success_count > 0 else "failed"
+                push_error = _build_push_error_message(push_result)
                 _log_notification(
                     session,
                     owner_id=config.owner_id,
@@ -213,7 +217,14 @@ def _send_escalation_alerts(
                     channel=NotificationChannel.PUSH,
                     notification_type=NotificationType.OWNER_ESCALATION,
                     status=push_status,
+                    error_message=push_error,
                 )
+                if push_status == "failed":
+                    logger.warning(
+                        "owner escalation push failed owner_id=%s reason=%s",
+                        config.owner_id,
+                        push_result.failure_reason,
+                    )
                 did_change = True
 
     contacts = list_ordered_contacts(session, config.owner_id)
@@ -374,3 +385,17 @@ def _log_notification(
         status=status,
         error_message=error_message,
     )
+
+
+def _build_push_error_message(result: PushResult) -> str | None:
+    if result.success_count > 0:
+        return None
+
+    if result.failure_reason == "vapid_not_configured":
+        return "Push-Zustellung nicht moeglich: VAPID-Konfiguration fehlt."
+    if result.failure_reason == "no_active_subscriptions":
+        return "Keine aktiven Push-Abonnements fuer diesen Account."
+    if result.failure_reason == "delivery_failed":
+        return "Push-Zustellung fehlgeschlagen. Pruefe Endpunkt und Browser-Berechtigung."
+
+    return "Push-Zustellung fehlgeschlagen."
