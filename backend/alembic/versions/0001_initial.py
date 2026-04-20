@@ -5,9 +5,9 @@ Revises:
 Create Date: 2026-04-15 03:00:00.000000
 """
 
-from alembic import op
 import sqlalchemy as sa
 
+from alembic import op
 
 revision = "0001_initial"
 down_revision = None
@@ -25,7 +25,12 @@ def upgrade() -> None:
     op.create_table(
         "pets",
         sa.Column("id", sa.String(length=64), primary_key=True),
-        sa.Column("owner_id", sa.String(length=64), sa.ForeignKey("owners.id", ondelete="CASCADE"), nullable=False),
+        sa.Column(
+            "owner_id",
+            sa.String(length=64),
+            sa.ForeignKey("owners.id", ondelete="CASCADE"),
+            nullable=False,
+        ),
         sa.Column("name", sa.String(length=255), nullable=False),
         sa.Column("breed", sa.String(length=255), nullable=False),
         sa.Column("age_years", sa.Integer(), nullable=False),
@@ -43,12 +48,22 @@ def upgrade() -> None:
         sa.Column("feeding_notes", sa.Text(), nullable=False),
         sa.Column("special_needs", sa.Text(), nullable=False),
         sa.Column("spare_key_location", sa.Text(), nullable=False),
-        sa.Column("created_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            nullable=False,
+            server_default=sa.func.now(),
+        ),
     )
     op.create_table(
         "emergency_contacts",
         sa.Column("id", sa.String(length=64), primary_key=True),
-        sa.Column("owner_id", sa.String(length=64), sa.ForeignKey("owners.id", ondelete="CASCADE"), nullable=False),
+        sa.Column(
+            "owner_id",
+            sa.String(length=64),
+            sa.ForeignKey("owners.id", ondelete="CASCADE"),
+            nullable=False,
+        ),
         sa.Column("name", sa.String(length=255), nullable=False),
         sa.Column("relationship_label", sa.String(length=255), nullable=False),
         sa.Column("phone", sa.String(length=255), nullable=False),
@@ -56,19 +71,39 @@ def upgrade() -> None:
         sa.Column("has_apartment_key", sa.Boolean(), nullable=False),
         sa.Column("can_take_dog", sa.Boolean(), nullable=False),
         sa.Column("notes", sa.Text(), nullable=False),
-        sa.Column("created_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            nullable=False,
+            server_default=sa.func.now(),
+        ),
     )
     op.create_table(
         "emergency_chain_entries",
         sa.Column("id", sa.String(length=64), primary_key=True),
-        sa.Column("owner_id", sa.String(length=64), sa.ForeignKey("owners.id", ondelete="CASCADE"), nullable=False),
-        sa.Column("contact_id", sa.String(length=64), sa.ForeignKey("emergency_contacts.id", ondelete="CASCADE"), nullable=False),
+        sa.Column(
+            "owner_id",
+            sa.String(length=64),
+            sa.ForeignKey("owners.id", ondelete="CASCADE"),
+            nullable=False,
+        ),
+        sa.Column(
+            "contact_id",
+            sa.String(length=64),
+            sa.ForeignKey("emergency_contacts.id", ondelete="CASCADE"),
+            nullable=False,
+        ),
         sa.Column("priority", sa.Integer(), nullable=False),
         sa.UniqueConstraint("owner_id", "contact_id", name="uq_emergency_chain_contact"),
     )
     op.create_table(
         "check_in_configs",
-        sa.Column("owner_id", sa.String(length=64), sa.ForeignKey("owners.id", ondelete="CASCADE"), primary_key=True),
+        sa.Column(
+            "owner_id",
+            sa.String(length=64),
+            sa.ForeignKey("owners.id", ondelete="CASCADE"),
+            primary_key=True,
+        ),
         sa.Column("interval_hours", sa.Integer(), nullable=False),
         sa.Column("escalation_delay_minutes", sa.Integer(), nullable=False),
         sa.Column("primary_method", sa.String(length=32), nullable=False),
@@ -78,11 +113,21 @@ def upgrade() -> None:
     op.create_table(
         "check_in_events",
         sa.Column("id", sa.String(length=64), primary_key=True),
-        sa.Column("owner_id", sa.String(length=64), sa.ForeignKey("owners.id", ondelete="CASCADE"), nullable=False),
+        sa.Column(
+            "owner_id",
+            sa.String(length=64),
+            sa.ForeignKey("owners.id", ondelete="CASCADE"),
+            nullable=False,
+        ),
         sa.Column("status", sa.String(length=32), nullable=False),
         sa.Column("acknowledged_at", sa.DateTime(timezone=True), nullable=False),
         sa.Column("method", sa.String(length=32), nullable=False),
-        sa.Column("created_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            nullable=False,
+            server_default=sa.func.now(),
+        ),
     )
 
 

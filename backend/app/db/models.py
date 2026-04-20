@@ -3,7 +3,18 @@ from __future__ import annotations
 from datetime import datetime
 from enum import StrEnum
 
-from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Integer, String, Text, UniqueConstraint
+import sqlalchemy as sa
+from sqlalchemy import (
+    Boolean,
+    DateTime,
+    Float,
+    ForeignKey,
+    Index,
+    Integer,
+    String,
+    Text,
+    UniqueConstraint,
+)
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
 
@@ -14,6 +25,7 @@ class CheckInMethod(StrEnum):
     PUSH = "push"
     EMAIL = "email"
     WEBAPP = "webapp"
+    PUBLIC_LINK = "public_link"
 
 
 class NotificationChannel(StrEnum):
@@ -81,6 +93,18 @@ class Owner(Base):
         back_populates="owner",
         cascade="all, delete-orphan",
     )
+    pet_documents: Mapped[list[PetDocument]] = relationship(
+        back_populates="owner",
+        cascade="all, delete-orphan",
+    )
+    push_subscriptions: Mapped[list[PushSubscription]] = relationship(
+        back_populates="owner",
+        cascade="all, delete-orphan",
+    )
+    check_in_action_tokens: Mapped[list[CheckInActionToken]] = relationship(
+        back_populates="owner",
+        cascade="all, delete-orphan",
+    )
 
 
 class Pet(TimestampMixin, Base):
@@ -112,6 +136,9 @@ class Pet(TimestampMixin, Base):
     )
 
     owner: Mapped[Owner] = relationship(back_populates="pets")
+    documents: Mapped[list[PetDocument]] = relationship(
+        back_populates="pet", cascade="all, delete-orphan"
+    )
 
 
 class EmergencyContact(TimestampMixin, Base):
@@ -158,6 +185,12 @@ class EmergencyChainEntry(Base):
 
 class CheckInConfig(Base):
     __tablename__ = "check_in_configs"
+    __table_args__ = (
+        sa.CheckConstraint(
+            "push_enabled = TRUE OR email_enabled = TRUE",
+            name="ck_check_in_configs_at_least_one_channel",
+        ),
+    )
 
     owner_id: Mapped[str] = mapped_column(
         ForeignKey("owners.id", ondelete="CASCADE"),
@@ -165,8 +198,8 @@ class CheckInConfig(Base):
     )
     interval_hours: Mapped[int] = mapped_column(Integer, nullable=False)
     escalation_delay_minutes: Mapped[int] = mapped_column(Integer, nullable=False)
-    primary_method: Mapped[str] = mapped_column(String(32), nullable=False)
-    backup_method: Mapped[str] = mapped_column(String(32), nullable=False)
+    push_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    email_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     next_scheduled_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 
     owner: Mapped[Owner] = relationship(back_populates="check_in_config")
@@ -237,3 +270,63 @@ class ResponderAcknowledgment(TimestampMixin, Base):
     responder_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
 
     escalation_event: Mapped[EscalationEvent] = relationship(back_populates="acknowledgments")
+
+
+class PetDocument(TimestampMixin, Base):
+    __tablename__ = "pet_documents"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    owner_id: Mapped[str] = mapped_column(
+        ForeignKey("owners.id", ondelete="CASCADE"), nullable=False
+    )
+    pet_id: Mapped[str] = mapped_column(ForeignKey("pets.id", ondelete="CASCADE"), nullable=False)
+    title: Mapped[str] = mapped_column(String(255), nullable=False)
+    document_type: Mapped[str] = mapped_column(String(32), nullable=False)
+    original_filename: Mapped[str] = mapped_column(String(255), nullable=False)
+    content_type: Mapped[str] = mapped_column(String(64), nullable=False)
+    size_bytes: Mapped[int] = mapped_column(Integer, nullable=False)
+    storage_key: Mapped[str] = mapped_column(String(512), nullable=False)
+    is_public: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+
+    owner: Mapped[Owner] = relationship(back_populates="pet_documents")
+    pet: Mapped[Pet] = relationship(back_populates="documents")
+
+
+class CheckInActionToken(TimestampMixin, Base):
+    __tablename__ = "check_in_action_tokens"
+    __table_args__ = (
+        UniqueConstraint("owner_id", "cycle_scheduled_at", name="uq_check_in_token_cycle"),
+        Index("ix_check_in_token_hash", "token_hash"),
+    )
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    owner_id: Mapped[str] = mapped_column(
+        ForeignKey("owners.id", ondelete="CASCADE"), nullable=False
+    )
+    cycle_scheduled_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    token_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    owner: Mapped[Owner] = relationship(back_populates="check_in_action_tokens")
+
+
+class PushSubscription(TimestampMixin, Base):
+    __tablename__ = "push_subscriptions"
+    __table_args__ = (
+        UniqueConstraint("endpoint", name="uq_push_sub_endpoint"),
+        Index("ix_push_sub_owner_active", "owner_id", "revoked_at"),
+    )
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    owner_id: Mapped[str] = mapped_column(
+        ForeignKey("owners.id", ondelete="CASCADE"), nullable=False
+    )
+    endpoint: Mapped[str] = mapped_column(Text, nullable=False)
+    p256dh: Mapped[str] = mapped_column(String(255), nullable=False)
+    auth: Mapped[str] = mapped_column(String(255), nullable=False)
+    user_agent: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    last_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    owner: Mapped[Owner] = relationship(back_populates="push_subscriptions")

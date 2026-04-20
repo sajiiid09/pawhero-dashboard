@@ -35,6 +35,9 @@ yarn-error.log*
 
 # env files (can opt-in for committing if needed)
 .env*
+!.env.example
+!backend/.env.example
+!frontend/.env.example
 .venv
 /backend/.venv
 /.pytest_cache

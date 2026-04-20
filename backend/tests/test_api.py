@@ -11,7 +11,7 @@ def test_healthcheck(client):
     response = client.get("/health")
 
     assert response.status_code == status.HTTP_200_OK
-    assert response.json() == {"status": "ok"}
+    assert response.json() == {"status": "ok", "database": "ok"}
 
 
 def test_dashboard_summary_uses_seeded_data(client, auth_headers):
@@ -120,8 +120,8 @@ def test_check_in_config_updates_next_scheduled_at(client, auth_headers):
         json={
             "intervalHours": 8,
             "escalationDelayMinutes": 15,
-            "primaryMethod": "push",
-            "backupMethod": "email",
+            "pushEnabled": True,
+            "emailEnabled": True,
         },
     )
 
@@ -129,6 +129,8 @@ def test_check_in_config_updates_next_scheduled_at(client, auth_headers):
     payload = update_response.json()
     assert payload["intervalHours"] == 8
     assert payload["escalationDelayMinutes"] == 15
+    assert payload["pushEnabled"] is True
+    assert payload["emailEnabled"] is True
     assert payload["nextScheduledAt"]
 
 
@@ -371,3 +373,36 @@ def test_notifications_response_uses_camel_case(client, auth_headers):
     assert "notification_type" not in item
     assert "error_message" not in item
     assert "created_at" not in item
+
+
+def test_check_in_config_toggle_channels(client, auth_headers):
+    update_response = client.put(
+        "/check-in-config",
+        headers=auth_headers,
+        json={
+            "intervalHours": 12,
+            "escalationDelayMinutes": 30,
+            "pushEnabled": False,
+            "emailEnabled": True,
+        },
+    )
+    assert update_response.status_code == status.HTTP_200_OK
+    payload = update_response.json()
+    assert payload["pushEnabled"] is False
+    assert payload["emailEnabled"] is True
+
+    get_response = client.get("/check-in-config", headers=auth_headers)
+    assert get_response.status_code == status.HTTP_200_OK
+    assert get_response.json()["pushEnabled"] is False
+
+    # Restore defaults for other tests.
+    client.put(
+        "/check-in-config",
+        headers=auth_headers,
+        json={
+            "intervalHours": 12,
+            "escalationDelayMinutes": 30,
+            "pushEnabled": True,
+            "emailEnabled": True,
+        },
+    )

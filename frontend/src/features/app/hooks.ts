@@ -10,8 +10,10 @@ import {
 
 import {
   acknowledgeCheckIn,
+  acknowledgePublicCheckIn,
   deleteEmergencyContact,
   deletePet,
+  deletePetDocument,
   getCheckInConfig,
   getCheckInEvents,
   getDashboardSummary,
@@ -20,13 +22,23 @@ import {
   getEmergencyContact,
   getEmergencyProfile,
   getNotificationLogs,
+  getPetDocumentDownloadUrl,
+  getPublicCheckInStatus,
   getPublicEmergencyProfile,
+  getPushSubscriptions,
+  getVapidPublicKey,
   getPet,
   getPets,
+  listPetDocuments,
   moveEmergencyContact,
+  revokePushSubscription,
   saveEmergencyContact,
   savePet,
+  savePushSubscription,
+  sendPushPreview,
   updateCheckInConfig,
+  uploadPetDocument,
+  uploadPetImage,
 } from "@/features/app/api";
 import { appQueryKeys } from "@/features/app/query-keys";
 import type {
@@ -35,6 +47,7 @@ import type {
   EmergencyContactInput,
   MoveDirection,
   PetInput,
+  PushSubscriptionInput,
 } from "@/features/app/types";
 
 export function useDashboardSummaryQuery() {
@@ -259,6 +272,132 @@ export function usePublicEmergencyProfileQuery(token: string) {
     queryFn: () => getPublicEmergencyProfile(token),
     enabled: Boolean(token),
     refetchInterval: 15_000,
+  });
+}
+
+export function useUploadPetImageMutation() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ petId, file }: { petId: string; file: File }) =>
+      uploadPetImage(petId, file),
+    onSuccess: async (pet) => {
+      queryClient.setQueryData(appQueryKeys.pet(pet.id), pet);
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: appQueryKeys.pets }),
+        queryClient.invalidateQueries({ queryKey: appQueryKeys.dashboard }),
+      ]);
+    },
+  });
+}
+
+export function usePetDocumentsQuery(petId: string) {
+  return useQuery({
+    queryKey: appQueryKeys.petDocuments(petId),
+    queryFn: () => listPetDocuments(petId),
+    enabled: Boolean(petId),
+  });
+}
+
+export function useUploadPetDocumentMutation(petId: string) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({
+      file,
+      title,
+      documentType,
+    }: {
+      file: File;
+      title: string;
+      documentType: string;
+    }) => uploadPetDocument(petId, file, title, documentType),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({
+        queryKey: appQueryKeys.petDocuments(petId),
+      });
+    },
+  });
+}
+
+export function useDeletePetDocumentMutation(petId: string) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (documentId: string) => deletePetDocument(petId, documentId),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({
+        queryKey: appQueryKeys.petDocuments(petId),
+      });
+    },
+  });
+}
+
+export function useDownloadPetDocument(petId: string) {
+  return useMutation({
+    mutationFn: (documentId: string) =>
+      getPetDocumentDownloadUrl(petId, documentId),
+    onSuccess: (data) => {
+      if (data.url) {
+        window.open(data.url, "_blank");
+      }
+    },
+  });
+}
+
+export function useVapidPublicKeyQuery() {
+  return useQuery({
+    queryKey: appQueryKeys.vapidPublicKey,
+    queryFn: getVapidPublicKey,
+  });
+}
+
+export function usePushSubscriptionsQuery() {
+  return useQuery({
+    queryKey: appQueryKeys.pushSubscriptions,
+    queryFn: getPushSubscriptions,
+  });
+}
+
+export function useSavePushSubscriptionMutation() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (input: PushSubscriptionInput) => savePushSubscription(input),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: appQueryKeys.pushSubscriptions });
+    },
+  });
+}
+
+export function useRevokePushSubscriptionMutation() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (input: PushSubscriptionInput) => revokePushSubscription(input),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: appQueryKeys.pushSubscriptions });
+    },
+  });
+}
+
+export function useSendPushPreviewMutation() {
+  return useMutation({
+    mutationFn: sendPushPreview,
+  });
+}
+
+export function usePublicCheckInStatusQuery(token: string) {
+  return useQuery({
+    queryKey: ["public-check-in-status", token],
+    queryFn: () => getPublicCheckInStatus(token),
+    enabled: Boolean(token),
+  });
+}
+
+export function useAcknowledgePublicCheckInMutation() {
+  return useMutation({
+    mutationFn: acknowledgePublicCheckIn,
   });
 }
 

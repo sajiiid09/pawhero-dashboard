@@ -45,8 +45,8 @@ def save_check_in_config(
 
     config.interval_hours = payload.interval_hours
     config.escalation_delay_minutes = payload.escalation_delay_minutes
-    config.primary_method = payload.primary_method
-    config.backup_method = payload.backup_method
+    config.push_enabled = payload.push_enabled
+    config.email_enabled = payload.email_enabled
     config.next_scheduled_at = recompute_next_scheduled_at(payload.interval_hours)
 
     session.flush()
@@ -59,8 +59,8 @@ def serialize_check_in_config(config: CheckInConfig) -> CheckInConfigDTO:
         {
             "interval_hours": config.interval_hours,
             "escalation_delay_minutes": config.escalation_delay_minutes,
-            "primary_method": config.primary_method,
-            "backup_method": config.backup_method,
+            "push_enabled": config.push_enabled,
+            "email_enabled": config.email_enabled,
             "next_scheduled_at": config.next_scheduled_at.isoformat(),
         }
     )
@@ -119,7 +119,11 @@ def build_escalation_display(
     }
 
 
-def acknowledge_check_in(session: Session, owner_id: str) -> CheckInStatusDTO:
+def acknowledge_check_in(
+    session: Session,
+    owner_id: str,
+    method: str = "webapp",
+) -> CheckInStatusDTO:
     config = get_check_in_config(session, owner_id)
     if config is None:
         from fastapi import HTTPException, status
@@ -134,13 +138,14 @@ def acknowledge_check_in(session: Session, owner_id: str) -> CheckInStatusDTO:
 
     # If overdue, record a missed event for the cycle that was skipped.
     if mode != EscalationMode.NORMAL:
+        missed_method = "push" if config.push_enabled else "email"
         create_check_in_event(
             session,
             owner_id=owner_id,
             event_id=generate_id(),
             status="missed",
             acknowledged_at=config.next_scheduled_at,
-            method=config.primary_method,
+            method=missed_method,
         )
 
     # Resolve active escalation if one exists.
@@ -155,7 +160,7 @@ def acknowledge_check_in(session: Session, owner_id: str) -> CheckInStatusDTO:
         event_id=generate_id(),
         status="acknowledged",
         acknowledged_at=now,
-        method="webapp",
+        method=method,
     )
 
     # Reset the timer.

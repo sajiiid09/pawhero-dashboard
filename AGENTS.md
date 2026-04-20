@@ -67,7 +67,7 @@ Backend tests (`conftest.py`) create a **temporary PostgreSQL database** per ses
   - All protected routes use `OwnerId` dependency (`app/api/dependencies.py`) which extracts owner_id from the Bearer token.
 - **Frontend**: Auth state in `src/features/auth/auth-context.tsx`. Token stored in localStorage, synced to `apiRequest()` via `setAuthToken()` in `api-client.ts`.
 - **Public emergency profiles**: Tokenized access via `GET /public/emergency-profile/{token}` — no auth required. Tokens are auto-generated per pet and accessible at `GET /pets/{petId}/emergency-access-token`.
-- **Route protection**: `(app)/layout.tsx` redirects to `/login` if not authenticated. `(public)/` routes (login, register, register verify OTP, `/s/[token]`) are accessible without auth.
+- **Route protection**: `(app)/layout.tsx` redirects to `/login` if not authenticated. `(public)/` routes (login, register, register verify OTP, `/s/[token]`, `/c/[token]`) are accessible without auth.
 - **Demo credentials**: `demo@pfoten-held.de` / `demo1234` (seeded by `app/db/seed.py`).
 
 ## Frontend Architecture
@@ -94,6 +94,8 @@ Backend tests (`conftest.py`) create a **temporary PostgreSQL database** per ses
 - **Config**: `app/core/config.py` via `pydantic-settings` (reads `DATABASE_URL`, `CORS_ORIGINS`, `JWT_SECRET_KEY`)
   - `JWT_SECRET_KEY` must be >= 32 bytes (startup validation)
   - OTP settings: `EMAIL_VERIFICATION_TTL_MINUTES`, `EMAIL_VERIFICATION_RESEND_COOLDOWN_SECONDS`
+- **Supabase Postgres**: Production app traffic may use Supabase transaction pooler (`:6543`) with `DB_POOL_MODE=transaction`. SQLAlchemy uses `NullPool` and disables psycopg prepared statements in transaction mode. Alembic prefers `MIGRATION_DATABASE_URL` when present, otherwise `DATABASE_URL`.
+- **Runtime safety**: `SCHEDULER_ENABLED` controls whether the APScheduler starts. Production must run exactly one scheduler instance. `GET /health` checks database connectivity without exposing internals.
 - **Migrations**: Alembic (`alembic/`). Always create migrations for schema changes.
 - **Models**: SQLAlchemy 2.0 declarative with `Mapped` columns. All models in `app/db/models.py`.
 - **Auth service**: `app/services/auth.py` — password hashing (bcrypt), JWT creation/verification, ID generation.
@@ -132,13 +134,84 @@ Backend tests (`conftest.py`) create a **temporary PostgreSQL database** per ses
 - **EscalationStatusCard**: embeds acknowledge action + deadline countdown via `formatDeadlineCountdown` helper
 - **Check-in page** (`check-in-page.tsx`): shows event history + escalation history + notification history below config
 
+## Notification Preferences (Phase 2)
+
+### Backend
+- **CheckInConfig model** has `push_enabled` (bool, default True) and `email_enabled` (bool, default True) with CHECK constraint ensuring at least one channel is active
+- **Migration**: `alembic/versions/0009_notification_prefs.py` — drops old `primary_method`/`backup_method` columns, adds boolean toggles
+- **Schemas**: `CheckInConfigDTO` and `CheckInConfigUpdateRequest` use `pushEnabled`/`emailEnabled` (camelCase aliases)
+- **Dispatcher**: `_send_pending_notifications()` only creates push logs when `push_enabled`, only sends emails when `email_enabled`. Emergency contact escalation emails always send.
+- **Acknowledge**: `acknowledge_check_in()` uses `"push"` as missed event method when `push_enabled`, else `"email"`
+- **Email template**: `build_reminder_email()` conditionally includes push notification note via `include_push_note` kwarg
+- **Registration**: default config has both channels enabled
+
+### Frontend
+- **CheckInConfig type**: `pushEnabled`/`emailEnabled` booleans (replaces old `primaryMethod`/`backupMethod` strings)
+- **Check-in page** (`check-in-page.tsx`): toggle switches with last-channel protection (can't disable both)
+- **Channel summary**: `getActiveChannelsLabel()` helper in `view-model.ts`
+
+## Real Browser Push Notifications (Phase 3)
+
+### Backend
+- **PushSubscription model** in `app/db/models.py` — id, owner_id, endpoint, p256dh, auth, user_agent, last_seen_at, revoked_at; unique constraint on endpoint, index on (owner_id, revoked_at)
+- **Migration**: `alembic/versions/0010_push_subscriptions.py`
+- **VAPID config**: `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT` env vars in Settings
+- **Dependency**: `pywebpush>=2.0.0`
+- **Push service** (`app/services/push.py`): `send_push_to_owner()` sends real Web Push via VAPID to all active subscriptions; auto-revokes on 410/404; returns PushResult with success/failure counts
+- **Push repository** (`app/repositories/push.py`): upsert by endpoint (idempotent), list active, revoke, mark_revoked
+- **Push schemas** (`app/schemas/push.py`): SavePushSubscriptionRequest, PushSubscriptionDTO, TestPushResultDTO
+- **Endpoints** (`app/api/routes/push.py`):
+  - `GET /push/vapid-public-key` — returns public key (no auth required)
+  - `GET /push/subscriptions` — list active subscriptions (auth)
+  - `POST /push/subscriptions` — save browser subscription (auth)
+  - `DELETE /push/subscriptions` — revoke by endpoint (auth)
+  - `POST /push/test` — send test notification (auth)
+- **Dispatcher updated**: `_send_pending_notifications` and `_send_escalation_alerts` now call `send_push_to_owner()` for real push delivery when `push_enabled=true`; logs push success/failure in NotificationLog
+
+### Frontend
+- **PWA manifest**: `src/app/manifest.ts` — name, short_name, icons (192x192, 512x512), display standalone, theme color
+- **Root layout**: `appleWebApp` and `icons` metadata added; `viewport` with `themeColor`
+- **Service worker**: `public/sw.js` — handles `push` event (shows notification), `notificationclick` (opens/focuses URL)
+- **Icons**: `public/icon-192.png`, `public/icon-512.png`, `public/apple-icon.png` generated from logo
+- **Push types**: `PushSubscriptionItem`, `PushSubscriptionInput`, `TestPushResult` in types.ts
+- **Push hooks**: `useVapidPublicKeyQuery`, `usePushSubscriptionsQuery`, `useSavePushSubscriptionMutation`, `useRevokePushSubscriptionMutation`, `useSendTestPushMutation`
+- **PushNotificationsCard** in `features/check-in/components/` — detects browser support, iOS Home Screen requirement, permission states; register/unsubscribe/test push flows
+- **Check-in page**: PushNotificationsCard replaces risk-profile card
+
+## Public Owner Check-In Link (Phase 4)
+
+### Backend
+- **CheckInActionToken model** in `app/db/models.py` — id, owner_id, cycle_scheduled_at, token_hash, expires_at, used_at, created_at; unique constraint on (owner_id, cycle_scheduled_at), index on token_hash
+- **CheckInMethod enum** extended with `PUBLIC_LINK = "public_link"`
+- **Migration**: `alembic/versions/0011_check_in_action_tokens.py`
+- **Token service** (`app/services/check_in_action_token.py`): `generate_action_token()` creates/reuses token per cycle, stores SHA-256 hash, returns raw token; `lookup_token()`, `is_token_expired()`, `mark_token_used()`; 24-hour expiry after cycle's `next_scheduled_at`
+- **Token repository** (`app/repositories/check_in_action_token.py`): find by hash, find by cycle, create, mark used
+- **Schemas** (`app/schemas/public_check_in.py`): `PublicCheckInStatusDTO` (mode, deadline, ownerName, acknowledged), `PublicCheckInAckResponse` (success, alreadyAcknowledged)
+- **Public endpoints** (`app/api/routes/public.py`):
+  - `GET /public/check-in/{token}` — status with owner name, acknowledged flag
+  - `POST /public/check-in/{token}/acknowledge` — acknowledge via public link (method=`"public_link"`), idempotent
+- **acknowledge_check_in()** now accepts optional `method` param (default `"webapp"`)
+- **Dispatcher updated**: `_send_pending_notifications` and `_send_escalation_alerts` generate action token per cycle, embed `{APP_URL}/c/{raw_token}` in email body and push URL
+- **Email templates updated**: `build_reminder_email()` and `build_owner_escalation_email()` accept `check_in_url` kwarg
+- **Acknowledgement behavior**: valid unused → acknowledge + mark used; already used → return alreadyAcknowledged; owner acknowledged via dashboard → detect + mark used + return alreadyAcknowledged; expired → 410 Gone; invalid → 404
+- **Tests**: `backend/tests/test_public_check_in.py` (12 tests: hashing, generation, lookup, expiry, usage, method param)
+
+### Frontend
+- **Route**: `src/app/(public)/c/[token]/page.tsx` — public check-in page
+- **Component**: `features/check-in/public-check-in-page.tsx` — status display, acknowledge action, already-acknowledged state, error/expired states
+- **Types**: `PublicCheckInStatus`, `PublicCheckInAckResponse` in types.ts
+- **API functions**: `getPublicCheckInStatus(token)`, `acknowledgePublicCheckIn(token)` in api.ts
+- **Hooks**: `usePublicCheckInStatusQuery`, `useAcknowledgePublicCheckInMutation` in hooks.ts
+- **Deadline countdown**: live 1-second countdown in deadline display via `useEffect` + `setInterval`
+
 ## Notification Engine (Phase 6)
 
 ### Backend
 - **Scheduler**: APScheduler `BackgroundScheduler` in `app/services/scheduler.py`, runs every 60s, starts/stops with FastAPI lifespan
+- **Maintenance cleanup**: Scheduler also prunes expired check-in action tokens past retention and revoked push subscriptions older than the configured retention window.
 - **Dispatcher** (`app/services/notification_dispatcher.py`):
-  - PENDING state → creates a simulated owner push log and sends owner reminder email in the same cycle
-  - ESCALATED state → creates/uses active escalation, emails owner immediately, then emails emergency contacts sequentially in priority order (5-min gap)
+  - PENDING state → conditionally sends real owner Web Push (if `push_enabled`) and/or sends owner reminder email (if `email_enabled`) in the same cycle
+  - ESCALATED state → conditionally sends real push to owner (if `push_enabled`), emails owner immediately, then emails emergency contacts sequentially in priority order (5-min gap). Emergency contact emails always send regardless of channel preferences.
   - Contact escalation emails must contain the public responder link (`/s/{token}`)
 - **Email service** (`app/services/email.py`): SMTP via Python stdlib (`smtplib`), plain text emails, German templates
 - **NotificationLog model** in `app/db/models.py` — includes `channel` (`push` or `email`) plus semantic types (`owner_reminder`, `owner_escalation`, `emergency_contact_escalation`, `responder_acknowledgment`)
@@ -151,7 +224,7 @@ Backend tests (`conftest.py`) create a **temporary PostgreSQL database** per ses
 - **Type**: `NotificationLogItem` in `dashboard/types.ts`
 - **Query key**: `notifications` in `query-keys.ts`
 - **Hook**: `useNotificationLogsQuery` in `hooks.ts`
-- **Component**: `NotificationHistoryCard` shows both type and channel so simulated push and email are distinguishable
+- **Component**: `NotificationHistoryCard` shows both type and channel so push and email are distinguishable
 - **Check-in page**: notification history section below escalation history
 - **Polling**: dashboard, notification history, escalation history, and emergency profiles refetch periodically for demo visibility
 
@@ -170,6 +243,40 @@ Backend tests (`conftest.py`) create a **temporary PostgreSQL database** per ses
 - **Escalation banner**: shown on public profile when escalation is active, shows minutes since escalation + acknowledgment count
 - **"Ich kümmere mich" action**: form for responders to acknowledge (email + optional name), calls POST endpoint, shows confirmation
 - **Mobile responsive**: responsive font sizes, larger touch targets, responsive header layout
+
+## Storage Foundation (Phase 1)
+
+### Architecture
+- **Supabase Storage** for file storage (public bucket `pet-images` + private bucket `pet-documents`).
+- **Pet images**: Public CDN URLs stored in `Pet.image_url`. Old data URLs still render (backward compatible).
+- **Pet documents**: Private storage with short-lived signed URLs via backend download endpoint.
+- **Storage service**: `app/services/storage.py` — abstraction over Supabase SDK (`supabase-py`). Uses service key server-side (bypasses RLS).
+- **Config**: `SUPABASE_URL`, `SUPABASE_SECRET_KEY`, `SUPABASE_PUBLISHABLE_KEY` env vars.
+- **Bucket requirements**: `pet-images` allows JPEG/PNG/WebP up to 5 MB; `pet-documents` allows PDF/JPEG/PNG/WebP up to 10 MB. `SUPABASE_SECRET_KEY` must remain backend-only.
+
+### Backend
+- **PetDocument model** in `app/db/models.py` — id, owner_id, pet_id, title, document_type, original_filename, content_type, size_bytes, storage_key, is_public, created_at
+- **Document types**: `medical_record`, `vaccination_record`, `insurance`, `lab_result`, `other`
+- **Migration**: `alembic/versions/0008_pet_documents.py`
+- **Schemas**: `app/schemas/documents.py` — `PetDocumentDTO`
+- **Repository**: `app/repositories/documents.py` — CRUD scoped to owner, count for limit (max 20/pet)
+- **Service**: `app/services/documents.py` — serialization
+- **Endpoints** (`app/api/routes/pets.py`):
+  - `POST /pets/{pet_id}/image` — multipart image upload (JPEG/PNG/WebP, max 5MB)
+- **Endpoints** (`app/api/routes/documents.py`):
+  - `GET /pets/{pet_id}/documents` — list documents
+  - `POST /pets/{pet_id}/documents` — multipart upload with title + document_type
+  - `DELETE /pets/{pet_id}/documents/{document_id}` — delete document + storage file
+  - `GET /pets/{pet_id}/documents/{document_id}/download` — returns signed URL for private download
+- **Pet delete** cleans up image and all document storage files
+
+### Frontend
+- **`apiUpload()`** in `api-client.ts` — multipart upload without `Content-Type: application/json`
+- **Image upload**: Two-step save (text fields first → image upload after). Uses `URL.createObjectURL()` for local preview.
+- **`PetDocumentsSection`** in `features/pets/pet-documents-section.tsx` — document list, upload form, download, delete on pet edit page
+- **Document hooks**: `usePetDocumentsQuery`, `useUploadPetDocumentMutation`, `useDeletePetDocumentMutation`, `useDownloadPetDocument`
+- **Query keys**: `petDocuments(petId)` in `query-keys.ts`
+- **`imageUrl` removed from pet form schema** — image uploaded separately via dedicated endpoint
 
 ## Documentation Discipline
 

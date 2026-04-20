@@ -1,4 +1,5 @@
 import { PageHeader } from "@/components/page-header";
+import { PetDocumentsSection } from "@/features/pets/pet-documents-section";
 import { PetForm } from "@/features/pets/pet-form";
 
 export default async function EditPetRoute({
@@ -16,6 +17,7 @@ export default async function EditPetRoute({
         description="Aktualisiere Stammdaten, Gesundheitshinweise und Notfallrelevantes in einem Schritt."
       />
       <PetForm petId={petId} />
+      <PetDocumentsSection petId={petId} />
     </div>
   );
 }

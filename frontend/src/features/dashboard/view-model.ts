@@ -160,6 +160,13 @@ export function getNotificationStatusLabel(status: string) {
   return status;
 }
 
+export function getActiveChannelsLabel(pushEnabled: boolean, emailEnabled: boolean) {
+  if (pushEnabled && emailEnabled) return "Push und E-Mail";
+  if (pushEnabled) return "Nur Push";
+  if (emailEnabled) return "Nur E-Mail";
+  return "Keine Kanaele";
+}
+
 function startOfDay(value: Date) {
   return new Date(value.getFullYear(), value.getMonth(), value.getDate());
 }

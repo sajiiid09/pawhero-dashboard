@@ -5,7 +5,10 @@ from app.db.models import EmergencyChainEntry, EmergencyContact
 from app.schemas.emergency_chain import EmergencyContactUpsertRequest
 
 
-def list_ordered_contacts(session: Session, owner_id: str) -> list[tuple[EmergencyContact, EmergencyChainEntry]]:
+def list_ordered_contacts(
+    session: Session,
+    owner_id: str,
+) -> list[tuple[EmergencyContact, EmergencyChainEntry]]:
     statement: Select[tuple[EmergencyContact, EmergencyChainEntry]] = (
         select(EmergencyContact, EmergencyChainEntry)
         .join(EmergencyChainEntry, EmergencyChainEntry.contact_id == EmergencyContact.id)
