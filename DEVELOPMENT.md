@@ -9,6 +9,7 @@
 - **Phase 2 (Notification Preferences)**: Toggle switches for push/email channels, conditional notification dispatch per channel, last-channel protection, updated schemas and migration.
 - **Phase 3 (Real Browser Push)**: VAPID-based Web Push, PushSubscription persistence, service worker, PWA manifest, PushNotificationsCard with device management, real push delivery from dispatcher, auto-revocation of expired subscriptions.
 - **Phase 4 (Public Owner Check-In Link)**: Tokenized public check-in page at `/c/{token}`, SHA-256 hashed action tokens with 24h expiry, idempotent acknowledgement via public link (`method="public_link"`), dispatcher embeds `/c/{token}` in reminder/escalation emails and push URLs, owner-first resolve detection, 12 backend tests.
+- **Phase 8 (Emergency Contact Push)**: Email-keyed `ContactPushSubscription` model, public subscribe/unsubscribe endpoints, `ContactPushCard` on public emergency profile page, dispatcher sends push to contacts during escalation alongside email, auto-revocation of dead subscriptions, service worker unchanged.
 - **Phase 5 (Supabase Production Fortification)**: Supabase transaction-pooler-safe SQLAlchemy settings, migration URL override, scheduler enable switch, DB-backed health check, scheduled cleanup for expired action tokens/revoked push subscriptions, env examples, shorter private-document signed URL TTL, frontend security headers, standalone Next.js output, pnpm Docker build.
 
 ## Current Behavior

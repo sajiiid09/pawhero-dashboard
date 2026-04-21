@@ -1,6 +1,10 @@
 import { apiRequest, apiUpload } from "@/lib/api-client";
 import type {
   CheckInConfig,
+  ContactPushSubscribeInput,
+  ContactPushStatus,
+  ContactPushStatusInput,
+  ContactPushUnsubscribeInput,
   EmergencyChainContact,
   EmergencyContactInput,
   EmergencyProfileView,
@@ -218,4 +222,34 @@ export function acknowledgePublicCheckIn(token: string) {
     `/public/check-in/${token}/acknowledge`,
     { method: "POST" },
   );
+}
+
+export function getContactPushStatus(input: ContactPushStatusInput) {
+  const params = new URLSearchParams({ email: input.email });
+  return apiRequest<ContactPushStatus>(
+    `/public/emergency-profile/${input.token}/contact-push?${params.toString()}`,
+  );
+}
+
+export function subscribeContactPush(input: ContactPushSubscribeInput) {
+  return apiRequest<{ success: boolean }>(`/public/emergency-profile/${input.token}/contact-push`, {
+    method: "POST",
+    body: JSON.stringify({
+      email: input.email,
+      endpoint: input.endpoint,
+      p256dh: input.p256dh,
+      auth: input.auth,
+      userAgent: input.userAgent,
+    }),
+  });
+}
+
+export function unsubscribeContactPush(input: ContactPushUnsubscribeInput) {
+  return apiRequest<{ success: boolean }>(`/public/emergency-profile/${input.token}/contact-push`, {
+    method: "DELETE",
+    body: JSON.stringify({
+      email: input.email,
+      endpoint: input.endpoint,
+    }),
+  });
 }

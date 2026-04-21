@@ -1,3 +1,4 @@
+import re
 from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import delete, select
@@ -19,6 +20,12 @@ def _fake_push_success(*args, **kwargs):
     return PushResult(success_count=1, failure_count=0)
 
 
+def extract_public_check_in_url(message_body: str) -> str:
+    match = re.search(r"https?://[^\s]+/c/[^\s]+", message_body)
+    assert match is not None
+    return match.group(0)
+
+
 def _reset_notification_flow_state(session) -> None:
     session.execute(delete(NotificationLog).where(NotificationLog.owner_id == "owner-demo"))
     session.execute(delete(ResponderAcknowledgment))
@@ -29,14 +36,18 @@ def _reset_notification_flow_state(session) -> None:
 def test_pending_dispatch_creates_push_and_email_once(monkeypatch, test_database_url: str):
     del test_database_url
     deliveries: list[tuple[str, str, str]] = []
+    push_deliveries: list[tuple[str, str, str]] = []
 
     def fake_send_email(*, to: str, subject: str, body: str) -> None:
         deliveries.append((to, subject, body))
 
+    def fake_send_push(session, owner_id, title, body, url="/dashboard", **kwargs):
+        del session, kwargs
+        push_deliveries.append((owner_id, title, url))
+        return PushResult(success_count=1, failure_count=0)
+
     monkeypatch.setattr("app.services.notification_dispatcher.send_email", fake_send_email)
-    monkeypatch.setattr(
-        "app.services.notification_dispatcher.send_push_to_owner", _fake_push_success
-    )
+    monkeypatch.setattr("app.services.notification_dispatcher.send_push_to_owner", fake_send_push)
 
     session = get_session_factory()()
     try:
@@ -65,6 +76,9 @@ def test_pending_dispatch_creates_push_and_email_once(monkeypatch, test_database
         assert sorted(log.channel for log in reminder_logs) == ["email", "push"]
         assert len(deliveries) == 1
         assert deliveries[0][0] == "demo@pfoten-held.de"
+        assert len(push_deliveries) == 1
+        expected_url = extract_public_check_in_url(deliveries[0][2])
+        assert push_deliveries[0][2] == expected_url
     finally:
         session.close()
 
@@ -75,13 +89,27 @@ def test_escalation_dispatch_emails_owner_then_contacts_with_public_link(
 ):
     del test_database_url
     deliveries: list[tuple[str, str, str]] = []
+    push_deliveries: list[tuple[str, str, str]] = []
+    contact_push_deliveries: list[tuple[str, str, str]] = []
 
     def fake_send_email(*, to: str, subject: str, body: str) -> None:
         deliveries.append((to, subject, body))
 
+    def fake_send_push(session, owner_id, title, body, url="/dashboard", **kwargs):
+        del session, kwargs
+        push_deliveries.append((owner_id, title, url))
+        return PushResult(success_count=1, failure_count=0)
+
+    def fake_send_push_to_contact(session, email, title, body, url="/dashboard", **kwargs):
+        del session, kwargs
+        contact_push_deliveries.append((email, title, url))
+        return PushResult(success_count=1, failure_count=0)
+
     monkeypatch.setattr("app.services.notification_dispatcher.send_email", fake_send_email)
+    monkeypatch.setattr("app.services.notification_dispatcher.send_push_to_owner", fake_send_push)
     monkeypatch.setattr(
-        "app.services.notification_dispatcher.send_push_to_owner", _fake_push_success
+        "app.services.notification_dispatcher.send_push_to_contact",
+        fake_send_push_to_contact,
     )
 
     session = get_session_factory()()
@@ -120,11 +148,21 @@ def test_escalation_dispatch_emails_owner_then_contacts_with_public_link(
         channels = [log.channel for log in owner_alerts]
         assert "email" in channels
         assert "push" in channels
-        assert len(contact_alerts) == 1
+        # Contact: email + push for first contact.
+        assert len(contact_alerts) == 2
+        contact_channels = [log.channel for log in contact_alerts]
+        assert "email" in contact_channels
+        assert "push" in contact_channels
         assert deliveries[0][0] == "demo@pfoten-held.de"
         assert deliveries[1][0] == expected_first_email
         assert "/s/token-bello-public" in deliveries[0][2]
         assert "/s/token-bello-public" in deliveries[1][2]
+        assert len(push_deliveries) == 1
+        expected_owner_url = extract_public_check_in_url(deliveries[0][2])
+        assert push_deliveries[0][2] == expected_owner_url
+        # Contact push sent to first contact email.
+        assert len(contact_push_deliveries) == 1
+        assert contact_push_deliveries[0][0] == expected_first_email
 
         dispatch_notifications(session)
         logs_after_second_run = list(
@@ -142,11 +180,12 @@ def test_escalation_dispatch_emails_owner_then_contacts_with_public_link(
                     if log.notification_type == NotificationType.EMERGENCY_CONTACT_ESCALATION
                 ]
             )
-            == 1
+            == 2
         )
 
-        first_contact_log = contact_alerts[0]
-        first_contact_log.created_at = datetime.now(UTC) - CONTACT_NOTIFY_GAP - timedelta(minutes=1)
+        # Advance the first contact's log past the gap so the next contact is notified.
+        email_contact_log = next(log for log in contact_alerts if log.channel == "email")
+        email_contact_log.created_at = datetime.now(UTC) - CONTACT_NOTIFY_GAP - timedelta(minutes=1)
         session.commit()
 
         dispatch_notifications(session)
@@ -163,8 +202,11 @@ def test_escalation_dispatch_emails_owner_then_contacts_with_public_link(
             for log in final_logs
             if log.notification_type == NotificationType.EMERGENCY_CONTACT_ESCALATION
         ]
-        assert len(final_contact_alerts) == 2
+        # 2 for first contact + 2 for second contact = 4.
+        assert len(final_contact_alerts) == 4
         assert deliveries[-1][0] == expected_second_email
+        assert len(contact_push_deliveries) == 2
+        assert contact_push_deliveries[1][0] == expected_second_email
     finally:
         session.close()
 
@@ -179,6 +221,10 @@ def test_public_acknowledgment_logs_owner_notification(client, auth_headers, mon
     monkeypatch.setattr("app.api.routes.public.send_email", fake_send_email)
     monkeypatch.setattr(
         "app.services.notification_dispatcher.send_push_to_owner", _fake_push_success
+    )
+    monkeypatch.setattr(
+        "app.services.notification_dispatcher.send_push_to_contact",
+        lambda *a, **kw: PushResult(success_count=1, failure_count=0),
     )
 
     session = get_session_factory()()

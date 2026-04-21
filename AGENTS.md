@@ -204,6 +204,27 @@ Backend tests (`conftest.py`) create a **temporary PostgreSQL database** per ses
 - **Hooks**: `usePublicCheckInStatusQuery`, `useAcknowledgePublicCheckInMutation` in hooks.ts
 - **Deadline countdown**: live 1-second countdown in deadline display via `useEffect` + `setInterval`
 
+## Emergency Contact Push (Phase 8)
+
+### Backend
+- **ContactPushSubscription model** in `app/db/models.py` — id, email, endpoint, p256dh, auth, user_agent, last_seen_at, revoked_at, created_at; unique constraint on endpoint, index on (email, revoked_at). Keyed by email (no FK to owners or contacts).
+- **Migration**: `alembic/versions/0012_contact_push_subscriptions.py`
+- **Repository** (`app/repositories/contact_push.py`): upsert by endpoint, list active by email, revoke, mark_revoked, delete_revoked_before
+- **Service** (`app/services/contact_push.py`): `save_contact_subscription()`, `revoke_contact_subscription()`, `send_push_to_contact()` — reuses VAPID infrastructure, sends to all devices registered for an email. Auto-revokes on 410/404.
+- **Schemas** (`app/schemas/contact_push.py`): `ContactPushSubscribeRequest` (email, endpoint, p256dh, auth, userAgent), `ContactPushUnsubscribeRequest` (endpoint)
+- **Public endpoints** (`app/api/routes/public.py`):
+  - `POST /public/contact-push/subscribe` — save browser push subscription keyed by email (no auth)
+  - `DELETE /public/contact-push/subscribe` — revoke by endpoint (no auth)
+- **Dispatcher updated**: `_send_escalation_alerts` now sends push to emergency contacts in addition to email during escalation. Push URL points to `/s/{token}`. Logged as `EMERGENCY_CONTACT_ESCALATION` with channel `push`.
+- **Open registration**: anyone can register push on the public profile by entering an email. No contact verification required.
+
+### Frontend
+- **Component**: `features/emergency-profile/contact-push-card.tsx` — shown on public emergency profile page (`/s/{token}`). Email input + browser permission flow + push subscription registration. Shows subscribed state with deactivate option.
+- **Types**: `ContactPushSubscribeInput` in types.ts
+- **API functions**: `subscribeContactPush()`, `unsubscribeContactPush()` in api.ts
+- **Hooks**: `useSubscribeContactPushMutation`, `useUnsubscribeContactPushMutation` in hooks.ts
+- **Service worker**: no changes needed — already reads `data.url` from push payload generically
+
 ## Notification Engine (Phase 6)
 
 ### Backend

@@ -1,4 +1,6 @@
-from fastapi import APIRouter, HTTPException, status
+import logging
+
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 
 from app.api.dependencies import DbSession
@@ -7,17 +9,31 @@ from app.db.models import NotificationChannel, NotificationType, Owner
 from app.repositories import notification as notification_repo
 from app.repositories import responder as responder_repo
 from app.repositories.check_in import get_active_escalation, get_check_in_config
+from app.repositories.emergency_chain import list_ordered_contacts
 from app.repositories.pets import get_pet_by_access_token
+from app.schemas.contact_push import (
+    ContactPushSubscribeRequest,
+    ContactPushStatusDTO,
+    ContactPushStatusRequest,
+    ContactPushUnsubscribeRequest,
+)
 from app.schemas.emergency_profile import EmergencyProfileDTO
 from app.schemas.public import ResponderAckRequest, ResponderAckResponse
 from app.schemas.public_check_in import PublicCheckInAckResponse, PublicCheckInStatusDTO
 from app.services.auth import generate_id
 from app.services.check_in import EscalationMode, acknowledge_check_in, compute_escalation_state
 from app.services.check_in_action_token import is_token_expired, lookup_token, mark_token_used
+from app.services.contact_push import (
+    list_contact_push_endpoints,
+    normalize_contact_email,
+    revoke_contact_subscription,
+    save_contact_subscription,
+)
 from app.services.email import build_responder_ack_email, send_email
 from app.services.emergency_profile import build_emergency_profile_for_pet
 
 router = APIRouter(prefix="/public", tags=["public"])
+logger = logging.getLogger(__name__)
 
 
 @router.get("/emergency-profile/{token}", response_model=EmergencyProfileDTO)
@@ -224,3 +240,86 @@ def acknowledge_public_check_in(
     session.commit()
 
     return PublicCheckInAckResponse(success=True, already_acknowledged=False)
+
+
+def _get_pet_for_public_contact_push(session: DbSession, token: str):
+    pet = get_pet_by_access_token(session, token)
+    if pet is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Notfallprofil nicht gefunden.",
+        )
+    return pet
+
+
+def _validate_contact_push_email(session: DbSession, owner_id: str, email: str) -> str:
+    normalized_email = normalize_contact_email(email)
+    contact_emails = {
+        normalize_contact_email(contact.email)
+        for contact, _entry in list_ordered_contacts(session, owner_id)
+        if contact.email
+    }
+    if normalized_email not in contact_emails:
+        logger.info(
+            "rejected contact push subscription owner_id=%s email=%s reason=email_not_in_chain",
+            owner_id,
+            normalized_email,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Diese E-Mail-Adresse ist nicht als Kontaktperson fuer dieses Profil hinterlegt.",
+        )
+    return normalized_email
+
+
+@router.get(
+    "/emergency-profile/{token}/contact-push",
+    response_model=ContactPushStatusDTO,
+)
+def get_contact_push_status(
+    token: str,
+    session: DbSession,
+    payload: ContactPushStatusRequest = Depends(),
+) -> ContactPushStatusDTO:
+    pet = _get_pet_for_public_contact_push(session, token)
+    normalized_email = _validate_contact_push_email(session, pet.owner_id, payload.email)
+    endpoints = list_contact_push_endpoints(session, normalized_email)
+    return ContactPushStatusDTO(email=normalized_email, endpoints=endpoints)
+
+
+@router.post("/emergency-profile/{token}/contact-push")
+def contact_push_subscribe(
+    token: str,
+    payload: ContactPushSubscribeRequest,
+    session: DbSession,
+) -> dict[str, bool]:
+    pet = _get_pet_for_public_contact_push(session, token)
+    normalized_email = _validate_contact_push_email(session, pet.owner_id, payload.email)
+    save_contact_subscription(
+        session,
+        email=normalized_email,
+        endpoint=payload.endpoint,
+        p256dh=payload.p256dh,
+        auth=payload.auth,
+        user_agent=payload.user_agent,
+    )
+    session.commit()
+    return {"success": True}
+
+
+@router.delete("/emergency-profile/{token}/contact-push")
+def contact_push_unsubscribe(
+    token: str,
+    payload: ContactPushUnsubscribeRequest,
+    session: DbSession,
+) -> dict[str, bool]:
+    pet = _get_pet_for_public_contact_push(session, token)
+    normalized_email = _validate_contact_push_email(session, pet.owner_id, payload.email)
+    found = revoke_contact_subscription(session, email=normalized_email, endpoint=payload.endpoint)
+    if not found:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Push-Abonnement nicht gefunden.",
+        )
+    session.commit()
+    return {"success": True}

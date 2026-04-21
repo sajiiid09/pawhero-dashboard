@@ -3,15 +3,18 @@ from __future__ import annotations
 import json
 import logging
 from dataclasses import dataclass
+from urllib.parse import urlparse
 
 from pywebpush import WebPushException, webpush
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
-from app.db.models import PushSubscription
+from app.db.models import CheckInConfig, PushSubscription
 from app.repositories import push as push_repo
+from app.repositories.check_in import get_check_in_config
 from app.schemas.push import PushPreviewResultDTO, PushSubscriptionDTO
 from app.services.auth import generate_id
+from app.services.check_in_action_token import generate_action_token
 
 logger = logging.getLogger(__name__)
 
@@ -62,12 +65,38 @@ def list_subscriptions(session: Session, owner_id: str) -> list[PushSubscription
     return [serialize_push_subscription(sub) for sub in subs]
 
 
+def build_owner_check_in_url(
+    session: Session,
+    owner_id: str,
+    app_url: str,
+    *,
+    config: CheckInConfig | None = None,
+) -> str | None:
+    owner_config = config or get_check_in_config(session, owner_id)
+    if owner_config is None:
+        logger.warning("missing check-in config for owner push owner_id=%s", owner_id)
+        return None
+
+    raw_token = generate_action_token(session, owner_config)
+    target_url = f"{app_url}/c/{raw_token}"
+    logger.info(
+        "generated owner push target owner_id=%s cycle=%s route=/c/<token>",
+        owner_id,
+        owner_config.next_scheduled_at.isoformat(),
+    )
+    return target_url
+
+
 def send_push_to_owner(
     session: Session,
     owner_id: str,
     title: str,
     body: str,
     url: str = "/dashboard",
+    *,
+    tag: str | None = None,
+    renotify: bool = False,
+    require_interaction: bool = True,
 ) -> PushResult:
     settings = get_settings()
 
@@ -80,11 +109,27 @@ def send_push_to_owner(
         logger.info("no active push subscriptions for owner_id=%s", owner_id)
         return PushResult(failure_count=1, failure_reason="no_active_subscriptions")
 
-    payload = json.dumps({"title": title, "body": body, "url": url})
+    payload = json.dumps(
+        build_push_payload(
+            title=title,
+            body=body,
+            url=url,
+            tag=tag,
+            renotify=renotify,
+            require_interaction=require_interaction,
+        )
+    )
     vapid_claims = {"sub": settings.vapid_subject}
 
     success = 0
     failure = 0
+    logger.info(
+        "sending owner push owner_id=%s active_subscriptions=%d target=%s tag=%s",
+        owner_id,
+        len(subs),
+        summarize_push_target(url),
+        tag or "<none>",
+    )
 
     for sub in subs:
         try:
@@ -115,18 +160,61 @@ def send_push_to_owner(
     elif success > 0 and failure > 0:
         failure_reason = "partial_delivery"
 
+    logger.info(
+        "owner push finished owner_id=%s success=%d failure=%d reason=%s",
+        owner_id,
+        success,
+        failure,
+        failure_reason or "none",
+    )
     return PushResult(success_count=success, failure_count=failure, failure_reason=failure_reason)
 
 
 def send_push_preview(session: Session, owner_id: str) -> PushPreviewResultDTO:
+    settings = get_settings()
+    target_url = build_owner_check_in_url(session, owner_id, settings.app_url)
+    if target_url is None:
+        logger.warning("preview push skipped missing owner check-in target owner_id=%s", owner_id)
+        return PushPreviewResultDTO(success_count=0, failure_count=1)
+
     result = send_push_to_owner(
         session,
         owner_id,
         title="Check-In Erinnerung",
-        body="Bitte bestaetige jetzt im Dashboard, dass alles in Ordnung ist.",
-        url="/check-in",
+        body="Bitte bestaetige jetzt direkt, dass alles in Ordnung ist.",
+        url=target_url,
+        tag=f"owner-preview:{owner_id}",
     )
     return PushPreviewResultDTO(
         success_count=result.success_count,
         failure_count=result.failure_count,
     )
+
+
+def build_push_payload(
+    *,
+    title: str,
+    body: str,
+    url: str,
+    tag: str | None = None,
+    renotify: bool = False,
+    require_interaction: bool = True,
+) -> dict[str, str | bool]:
+    payload: dict[str, str | bool] = {
+        "title": title,
+        "body": body,
+        "url": url,
+        "renotify": renotify,
+        "requireInteraction": require_interaction,
+    }
+    if tag:
+        payload["tag"] = tag
+    return payload
+
+
+def summarize_push_target(url: str) -> str:
+    parsed = urlparse(url)
+    path = parsed.path or url
+    if path.startswith("/c/"):
+        return "/c/<token>"
+    return path

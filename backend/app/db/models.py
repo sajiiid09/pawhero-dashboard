@@ -330,3 +330,20 @@ class PushSubscription(TimestampMixin, Base):
     revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     owner: Mapped[Owner] = relationship(back_populates="push_subscriptions")
+
+
+class ContactPushSubscription(TimestampMixin, Base):
+    __tablename__ = "contact_push_subscriptions"
+    __table_args__ = (
+        UniqueConstraint("endpoint", name="uq_contact_push_endpoint"),
+        Index("ix_contact_push_email_active", "email", "revoked_at"),
+    )
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    email: Mapped[str] = mapped_column(String(255), nullable=False)
+    endpoint: Mapped[str] = mapped_column(Text, nullable=False)
+    p256dh: Mapped[str] = mapped_column(String(255), nullable=False)
+    auth: Mapped[str] = mapped_column(String(255), nullable=False)
+    user_agent: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    last_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
