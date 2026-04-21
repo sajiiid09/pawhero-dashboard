@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
 from uuid import uuid4
 
@@ -197,7 +198,10 @@ def test_push_subscription_revoke_not_found(client, auth_headers):
 
 
 def test_push_preview_endpoint_returns_result(client, auth_headers, monkeypatch):
+    captured: dict[str, str] = {}
+
     def fake_send(*args, **kwargs):
+        captured["url"] = kwargs["url"]
         return PushResult(success_count=1, failure_count=0)
 
     monkeypatch.setattr("app.services.push.send_push_to_owner", fake_send)
@@ -207,6 +211,8 @@ def test_push_preview_endpoint_returns_result(client, auth_headers, monkeypatch)
     data = response.json()
     assert data["successCount"] == 1
     assert data["failureCount"] == 0
+    assert "/c/" in captured["url"]
+    assert "/check-in" not in captured["url"]
 
 
 def test_push_preview_persists_revoked_dead_endpoint(client, monkeypatch):
@@ -234,6 +240,7 @@ def test_push_preview_persists_revoked_dead_endpoint(client, monkeypatch):
             vapid_private_key="test-private-key",
             vapid_public_key="test-public-key",
             vapid_subject="mailto:test@example.com",
+            app_url="https://app.bdtextilehub.com",
         ),
     )
     monkeypatch.setattr("app.services.push.webpush", fake_webpush)
@@ -262,7 +269,8 @@ def test_dispatcher_real_push_called_when_enabled(monkeypatch, test_database_url
     del test_database_url
     push_calls: list[tuple[str, str, str]] = []
 
-    def fake_send_push(session, owner_id, title, body, url="/dashboard"):
+    def fake_send_push(session, owner_id, title, body, url="/dashboard", **kwargs):
+        del kwargs
         push_calls.append((owner_id, title, url))
         return PushResult(success_count=1, failure_count=0)
 
@@ -326,6 +334,16 @@ def _create_owner() -> str:
                 display_name=f"Owner {owner_id}",
                 password_hash=hash_password("secure123"),
                 email_verified=True,
+            )
+        )
+        session.add(
+            CheckInConfig(
+                owner_id=owner_id,
+                interval_hours=12,
+                escalation_delay_minutes=30,
+                push_enabled=True,
+                email_enabled=True,
+                next_scheduled_at=datetime.now(UTC) + timedelta(minutes=30),
             )
         )
         session.commit()

@@ -1,3 +1,4 @@
+import re
 from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import delete, select
@@ -19,6 +20,12 @@ def _fake_push_success(*args, **kwargs):
     return PushResult(success_count=1, failure_count=0)
 
 
+def extract_public_check_in_url(message_body: str) -> str:
+    match = re.search(r"https?://[^\s]+/c/[^\s]+", message_body)
+    assert match is not None
+    return match.group(0)
+
+
 def _reset_notification_flow_state(session) -> None:
     session.execute(delete(NotificationLog).where(NotificationLog.owner_id == "owner-demo"))
     session.execute(delete(ResponderAcknowledgment))
@@ -29,14 +36,18 @@ def _reset_notification_flow_state(session) -> None:
 def test_pending_dispatch_creates_push_and_email_once(monkeypatch, test_database_url: str):
     del test_database_url
     deliveries: list[tuple[str, str, str]] = []
+    push_deliveries: list[tuple[str, str, str]] = []
 
     def fake_send_email(*, to: str, subject: str, body: str) -> None:
         deliveries.append((to, subject, body))
 
+    def fake_send_push(session, owner_id, title, body, url="/dashboard", **kwargs):
+        del session, kwargs
+        push_deliveries.append((owner_id, title, url))
+        return PushResult(success_count=1, failure_count=0)
+
     monkeypatch.setattr("app.services.notification_dispatcher.send_email", fake_send_email)
-    monkeypatch.setattr(
-        "app.services.notification_dispatcher.send_push_to_owner", _fake_push_success
-    )
+    monkeypatch.setattr("app.services.notification_dispatcher.send_push_to_owner", fake_send_push)
 
     session = get_session_factory()()
     try:
@@ -65,6 +76,9 @@ def test_pending_dispatch_creates_push_and_email_once(monkeypatch, test_database
         assert sorted(log.channel for log in reminder_logs) == ["email", "push"]
         assert len(deliveries) == 1
         assert deliveries[0][0] == "demo@pfoten-held.de"
+        assert len(push_deliveries) == 1
+        expected_url = extract_public_check_in_url(deliveries[0][2])
+        assert push_deliveries[0][2] == expected_url
     finally:
         session.close()
 
@@ -75,14 +89,18 @@ def test_escalation_dispatch_emails_owner_then_contacts_with_public_link(
 ):
     del test_database_url
     deliveries: list[tuple[str, str, str]] = []
+    push_deliveries: list[tuple[str, str, str]] = []
 
     def fake_send_email(*, to: str, subject: str, body: str) -> None:
         deliveries.append((to, subject, body))
 
+    def fake_send_push(session, owner_id, title, body, url="/dashboard", **kwargs):
+        del session, kwargs
+        push_deliveries.append((owner_id, title, url))
+        return PushResult(success_count=1, failure_count=0)
+
     monkeypatch.setattr("app.services.notification_dispatcher.send_email", fake_send_email)
-    monkeypatch.setattr(
-        "app.services.notification_dispatcher.send_push_to_owner", _fake_push_success
-    )
+    monkeypatch.setattr("app.services.notification_dispatcher.send_push_to_owner", fake_send_push)
 
     session = get_session_factory()()
     try:
@@ -125,6 +143,9 @@ def test_escalation_dispatch_emails_owner_then_contacts_with_public_link(
         assert deliveries[1][0] == expected_first_email
         assert "/s/token-bello-public" in deliveries[0][2]
         assert "/s/token-bello-public" in deliveries[1][2]
+        assert len(push_deliveries) == 1
+        expected_owner_url = extract_public_check_in_url(deliveries[0][2])
+        assert push_deliveries[0][2] == expected_owner_url
 
         dispatch_notifications(session)
         logs_after_second_run = list(
