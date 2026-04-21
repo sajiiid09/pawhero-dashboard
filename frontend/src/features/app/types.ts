@@ -126,3 +126,11 @@ export type PublicCheckInAckResponse = {
   success: boolean;
   alreadyAcknowledged: boolean;
 };
+
+export type ContactPushSubscribeInput = {
+  email: string;
+  endpoint: string;
+  p256dh: string;
+  auth: string;
+  userAgent?: string | null;
+};

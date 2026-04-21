@@ -1,6 +1,7 @@
 import { apiRequest, apiUpload } from "@/lib/api-client";
 import type {
   CheckInConfig,
+  ContactPushSubscribeInput,
   EmergencyChainContact,
   EmergencyContactInput,
   EmergencyProfileView,
@@ -218,4 +219,18 @@ export function acknowledgePublicCheckIn(token: string) {
     `/public/check-in/${token}/acknowledge`,
     { method: "POST" },
   );
+}
+
+export function subscribeContactPush(input: ContactPushSubscribeInput) {
+  return apiRequest<{ success: boolean }>("/public/contact-push/subscribe", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+}
+
+export function unsubscribeContactPush(endpoint: string) {
+  return apiRequest<{ success: boolean }>("/public/contact-push/subscribe", {
+    method: "DELETE",
+    body: JSON.stringify({ endpoint }),
+  });
 }

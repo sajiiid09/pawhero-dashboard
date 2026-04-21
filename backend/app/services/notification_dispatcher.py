@@ -20,6 +20,7 @@ from app.repositories.emergency_chain import list_ordered_contacts
 from app.repositories.pets import list_pets
 from app.services.auth import generate_id
 from app.services.check_in import EscalationMode, compute_escalation_state
+from app.services.contact_push import send_push_to_contact
 from app.services.email import (
     build_emergency_contact_escalation_email,
     build_owner_escalation_email,
@@ -92,8 +93,7 @@ def _send_pending_notifications(session: Session, config: CheckInConfig) -> None
         if check_in_url is None:
             push_status = "failed"
             push_error = (
-                "Push-Zustellung nicht moeglich: "
-                "Check-In-Link konnte nicht erzeugt werden."
+                "Push-Zustellung nicht moeglich: Check-In-Link konnte nicht erzeugt werden."
             )
         else:
             push_result = send_push_to_owner(
@@ -287,6 +287,36 @@ def _send_escalation_alerts(
         subject=subject,
         body=body,
     )
+
+    # Also send push to the contact if they have registered devices.
+    try:
+        push_result = send_push_to_contact(
+            session,
+            email=contact.email,
+            title=f"Pfoten-Held: Hilfe fuer {primary_pet.name} benoetigt",
+            body=(
+                f"{owner.display_name} hat auf keinen Check-In reagiert. "
+                f"Du bist Kontakt {next_index + 1} von {len(contacts)}."
+            ),
+            url=public_profile_url,
+        )
+        push_status = "sent" if push_result.success_count > 0 else "failed"
+        _log_notification(
+            session,
+            owner_id=config.owner_id,
+            escalation_event_id=active_escalation.id,
+            recipient_email=contact.email,
+            channel=NotificationChannel.PUSH,
+            notification_type=NotificationType.EMERGENCY_CONTACT_ESCALATION,
+            status=push_status,
+        )
+    except Exception:
+        logger.exception(
+            "contact push failed owner_id=%s contact_email=%s",
+            config.owner_id,
+            contact.email,
+        )
+
     session.commit()
 
 

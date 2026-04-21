@@ -8,12 +8,20 @@ from app.repositories import notification as notification_repo
 from app.repositories import responder as responder_repo
 from app.repositories.check_in import get_active_escalation, get_check_in_config
 from app.repositories.pets import get_pet_by_access_token
+from app.schemas.contact_push import (
+    ContactPushSubscribeRequest,
+    ContactPushUnsubscribeRequest,
+)
 from app.schemas.emergency_profile import EmergencyProfileDTO
 from app.schemas.public import ResponderAckRequest, ResponderAckResponse
 from app.schemas.public_check_in import PublicCheckInAckResponse, PublicCheckInStatusDTO
 from app.services.auth import generate_id
 from app.services.check_in import EscalationMode, acknowledge_check_in, compute_escalation_state
 from app.services.check_in_action_token import is_token_expired, lookup_token, mark_token_used
+from app.services.contact_push import (
+    revoke_contact_subscription,
+    save_contact_subscription,
+)
 from app.services.email import build_responder_ack_email, send_email
 from app.services.emergency_profile import build_emergency_profile_for_pet
 
@@ -224,3 +232,35 @@ def acknowledge_public_check_in(
     session.commit()
 
     return PublicCheckInAckResponse(success=True, already_acknowledged=False)
+
+
+@router.post("/contact-push/subscribe")
+def contact_push_subscribe(
+    payload: ContactPushSubscribeRequest,
+    session: DbSession,
+) -> dict[str, bool]:
+    save_contact_subscription(
+        session,
+        email=payload.email,
+        endpoint=payload.endpoint,
+        p256dh=payload.p256dh,
+        auth=payload.auth,
+        user_agent=payload.user_agent,
+    )
+    session.commit()
+    return {"success": True}
+
+
+@router.delete("/contact-push/subscribe")
+def contact_push_unsubscribe(
+    payload: ContactPushUnsubscribeRequest,
+    session: DbSession,
+) -> dict[str, bool]:
+    found = revoke_contact_subscription(session, payload.endpoint)
+    if not found:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Push-Abonnement nicht gefunden.",
+        )
+    session.commit()
+    return {"success": True}

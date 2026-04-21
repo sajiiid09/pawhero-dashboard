@@ -36,6 +36,8 @@ import {
   savePet,
   savePushSubscription,
   sendPushPreview,
+  subscribeContactPush,
+  unsubscribeContactPush,
   updateCheckInConfig,
   uploadPetDocument,
   uploadPetImage,
@@ -398,6 +400,18 @@ export function usePublicCheckInStatusQuery(token: string) {
 export function useAcknowledgePublicCheckInMutation() {
   return useMutation({
     mutationFn: acknowledgePublicCheckIn,
+  });
+}
+
+export function useSubscribeContactPushMutation() {
+  return useMutation({
+    mutationFn: subscribeContactPush,
+  });
+}
+
+export function useUnsubscribeContactPushMutation() {
+  return useMutation({
+    mutationFn: (endpoint: string) => unsubscribeContactPush(endpoint),
   });
 }
 

@@ -25,6 +25,7 @@ import {
   usePublicEmergencyProfileQuery,
 } from "@/features/app/hooks";
 import { acknowledgePublicEmergency } from "@/features/app/api";
+import { ContactPushCard } from "@/features/emergency-profile/contact-push-card";
 
 type EmergencyProfilePageProps = {
   petId?: string;
@@ -228,6 +229,9 @@ export function EmergencyProfilePage({
             {hasEscalation && isPublic ? (
               <ResponderAction token={token!} />
             ) : null}
+
+            {/* Contact push notifications (public only) */}
+            {isPublic ? <ContactPushCard /> : null}
 
             {/* Contacts */}
             <article className="rounded-[28px] border border-border-soft bg-white p-7">
