@@ -41,7 +41,6 @@ function detectPushState(): PushState {
   if (isIOS && !isStandalone) return "ios-not-installed";
 
   if (Notification.permission === "denied") return "permission-denied";
-  if (Notification.permission === "granted") return "subscribed";
   return "default";
 }
 
@@ -58,13 +57,19 @@ function urlBase64ToArrayBuffer(base64String: string): ArrayBuffer {
 
 export function PushNotificationsCard() {
   const { data: vapidData } = useVapidPublicKeyQuery();
-  const { data: subscriptions } = usePushSubscriptionsQuery();
+  const {
+    data: subscriptions,
+    isLoading: isSubscriptionsLoading,
+    refetch: refetchSubscriptions,
+  } = usePushSubscriptionsQuery();
   const saveSubscription = useSavePushSubscriptionMutation();
   const revokeSubscription = useRevokePushSubscriptionMutation();
   const pushPreview = useSendPushPreviewMutation();
 
   const [localPushState, setLocalPushState] = useState<PushState | null>(null);
   const [localError, setLocalError] = useState<string | null>(null);
+  const [currentDeviceEndpoint, setCurrentDeviceEndpoint] = useState<string | null>(null);
+  const [isDeviceStateReady, setIsDeviceStateReady] = useState(false);
   const [installPromptEvent, setInstallPromptEvent] =
     useState<BeforeInstallPromptEvent | null>(null);
   const [isInstallPending, setIsInstallPending] = useState(false);
@@ -95,6 +100,35 @@ export function PushNotificationsCard() {
     };
   }, [hydrated]);
 
+  const syncCurrentDeviceEndpoint = useCallback(async () => {
+    if (typeof window === "undefined" || !("serviceWorker" in navigator)) {
+      setCurrentDeviceEndpoint(null);
+      setIsDeviceStateReady(true);
+      return null;
+    }
+
+    try {
+      const registration = await navigator.serviceWorker.ready;
+      const subscription = await registration.pushManager.getSubscription();
+      const endpoint = subscription?.endpoint ?? null;
+      setCurrentDeviceEndpoint(endpoint);
+      return endpoint;
+    } catch {
+      setCurrentDeviceEndpoint(null);
+      return null;
+    } finally {
+      setIsDeviceStateReady(true);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!hydrated) {
+      return;
+    }
+
+    void syncCurrentDeviceEndpoint();
+  }, [hydrated, syncCurrentDeviceEndpoint]);
+
   // Compute push support state only after hydration (needs navigator).
   const pushState: PushState = useMemo(() => {
     if (!hydrated) return "default";
@@ -102,7 +136,12 @@ export function PushNotificationsCard() {
     return detectPushState();
   }, [hydrated, localPushState]);
 
-  const isSubscribed = subscriptions && subscriptions.length > 0;
+  const isCurrentDeviceSubscribed = Boolean(
+    currentDeviceEndpoint &&
+      subscriptions?.some((subscription) => subscription.endpoint === currentDeviceEndpoint),
+  );
+  const hasOtherDeviceSubscriptions =
+    (subscriptions?.length ?? 0) > 0 && !isCurrentDeviceSubscribed;
 
   const handleSubscribe = useCallback(async () => {
     if (!vapidData?.publicKey) {
@@ -157,7 +196,9 @@ export function PushNotificationsCard() {
         userAgent: navigator.userAgent,
       });
 
-      setLocalPushState("subscribed");
+      setCurrentDeviceEndpoint(subscription.endpoint);
+      await refetchSubscriptions();
+      setLocalPushState(null);
     } catch (err) {
       if (Notification.permission === "denied") {
         setLocalPushState("permission-denied");
@@ -166,7 +207,7 @@ export function PushNotificationsCard() {
         setLocalPushState("default");
       }
     }
-  }, [vapidData, saveSubscription]);
+  }, [refetchSubscriptions, saveSubscription, vapidData]);
 
   const handleInstallApp = useCallback(async () => {
     if (!installPromptEvent) return;
@@ -185,8 +226,6 @@ export function PushNotificationsCard() {
   }, [installPromptEvent]);
 
   const handleUnsubscribe = useCallback(async () => {
-    if (!subscriptions || subscriptions.length === 0) return;
-
     try {
       const registration = await navigator.serviceWorker.ready;
       const pushSub = await registration.pushManager.getSubscription();
@@ -199,11 +238,13 @@ export function PushNotificationsCard() {
         });
         await pushSub.unsubscribe();
       }
-      setLocalPushState("default");
+      setCurrentDeviceEndpoint(null);
+      await refetchSubscriptions();
+      setLocalPushState(null);
     } catch (err) {
       setLocalError(err instanceof Error ? err.message : "Abmeldung fehlgeschlagen.");
     }
-  }, [subscriptions, revokeSubscription]);
+  }, [refetchSubscriptions, revokeSubscription]);
 
   const handlePushPreview = useCallback(async () => {
     try {
@@ -213,7 +254,7 @@ export function PushNotificationsCard() {
     }
   }, [pushPreview]);
 
-  if (!hydrated) {
+  if (!hydrated || !isDeviceStateReady || isSubscriptionsLoading) {
     return (
       <div className="rounded-[22px] border border-border-soft bg-white p-5">
         <div className="flex items-center gap-2 text-primary">
@@ -258,7 +299,7 @@ export function PushNotificationsCard() {
         aendere die Berechtigung in den Einstellungen deines Browsers.
       </p>
     );
-  } else if (isSubscribed) {
+  } else if (isCurrentDeviceSubscribed) {
     content = (
       <div className="space-y-3">
         <div className="flex items-center gap-2">
@@ -297,6 +338,12 @@ export function PushNotificationsCard() {
         <p className="text-sm leading-7 text-text-muted">
           Aktiviere Push, um Benachrichtigungen direkt auf diesem Geraet zu erhalten.
         </p>
+        {hasOtherDeviceSubscriptions ? (
+          <p className="text-sm leading-7 text-text-muted">
+            Andere Geraete in deinem Account sind bereits registriert. Dieses Geraet ist
+            aktuell noch nicht fuer Push aktiviert.
+          </p>
+        ) : null}
         <Button
           variant="primary"
           size="sm"

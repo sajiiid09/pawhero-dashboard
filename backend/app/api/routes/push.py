@@ -58,4 +58,6 @@ def revoke_push_subscription(
 
 @router.post("/preview", response_model=PushPreviewResultDTO)
 def send_push_preview(session: DbSession, owner_id: OwnerId) -> PushPreviewResultDTO:
-    return push_service.send_push_preview(session, owner_id)
+    result = push_service.send_push_preview(session, owner_id)
+    session.commit()
+    return result

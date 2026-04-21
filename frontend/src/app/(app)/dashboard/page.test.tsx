@@ -46,8 +46,9 @@ describe("DashboardPage", () => {
 
     expect(screen.getByRole("heading", { name: "Dashboard" })).toBeInTheDocument();
     expect(screen.getByText("Meine Tiere")).toBeInTheDocument();
+    expect(screen.getByText("Notfallkette")).toBeInTheDocument();
     expect(screen.getByText("Letzter Check-In Verlauf")).toBeInTheDocument();
     expect(screen.getByText("Normalbetrieb")).toBeInTheDocument();
-    expect(screen.getByText("Bello")).toBeInTheDocument();
+    expect(screen.getByText("Aktiv")).toBeInTheDocument();
   });
 });

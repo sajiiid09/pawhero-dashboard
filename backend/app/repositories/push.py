@@ -1,9 +1,12 @@
+import logging
 from datetime import UTC, datetime
 
 from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
 from app.db.models import PushSubscription
+
+logger = logging.getLogger(__name__)
 
 
 def upsert_subscription(
@@ -19,6 +22,16 @@ def upsert_subscription(
     existing = session.scalar(select(PushSubscription).where(PushSubscription.endpoint == endpoint))
 
     if existing is not None:
+        previous_owner_id = existing.owner_id
+        if previous_owner_id != owner_id:
+            logger.info(
+                "transferring push endpoint between owners "
+                "endpoint=%s from_owner_id=%s to_owner_id=%s",
+                endpoint,
+                previous_owner_id,
+                owner_id,
+            )
+            existing.owner_id = owner_id
         existing.p256dh = p256dh
         existing.auth = auth
         existing.user_agent = user_agent
