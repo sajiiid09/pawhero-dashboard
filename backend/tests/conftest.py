@@ -29,7 +29,9 @@ def test_database_url() -> Iterator[str]:
 
     database_url = f"postgresql+psycopg:///{database_name}"
     previous_database_url = os.environ.get("DATABASE_URL")
+    previous_migration_database_url = os.environ.get("MIGRATION_DATABASE_URL")
     os.environ["DATABASE_URL"] = database_url
+    os.environ["MIGRATION_DATABASE_URL"] = database_url
     reset_database_state()
 
     alembic_config = Config("alembic.ini")
@@ -43,6 +45,10 @@ def test_database_url() -> Iterator[str]:
             os.environ.pop("DATABASE_URL", None)
         else:
             os.environ["DATABASE_URL"] = previous_database_url
+        if previous_migration_database_url is None:
+            os.environ.pop("MIGRATION_DATABASE_URL", None)
+        else:
+            os.environ["MIGRATION_DATABASE_URL"] = previous_migration_database_url
         reset_database_state()
         with psycopg.connect(admin_dsn, autocommit=True) as connection:
             with connection.cursor() as cursor:
