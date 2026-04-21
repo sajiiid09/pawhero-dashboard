@@ -10,7 +10,16 @@ from fastapi import status
 from pywebpush import WebPushException
 from sqlalchemy import select
 
-from app.db.models import CheckInConfig, NotificationLog, Owner, PushSubscription
+from app.db.models import (
+    CheckInConfig,
+    ContactPushSubscription,
+    EmergencyChainEntry,
+    EmergencyContact,
+    NotificationLog,
+    Owner,
+    Pet,
+    PushSubscription,
+)
 from app.db.session import get_session_factory
 from app.services.auth import create_access_token, hash_password
 from app.services.push import PushResult
@@ -265,6 +274,143 @@ def test_push_preview_persists_revoked_dead_endpoint(client, monkeypatch):
     assert webpush_calls == 1
 
 
+def test_contact_push_subscription_requires_matching_public_contact_email(client):
+    response = client.post(
+        "/public/emergency-profile/token-bello-public/contact-push",
+        json={
+            "email": "intruder@example.com",
+            "endpoint": "https://push.example.com/sub/contact-invalid",
+            "p256dh": "test-p256dh-key",
+            "auth": "test-auth-key",
+            "userAgent": "TestBrowser/1.0",
+        },
+    )
+    assert response.status_code == status.HTTP_403_FORBIDDEN
+    assert "Kontaktperson" in response.json()["detail"]
+
+
+def test_contact_push_subscription_status_and_revoke_are_token_scoped(client):
+    profile_response = client.get("/public/emergency-profile/token-bello-public")
+    assert profile_response.status_code == status.HTTP_200_OK
+    contact_email = profile_response.json()["contacts"][0]["email"]
+    endpoint = "https://push.example.com/sub/contact-valid"
+
+    subscribe_response = client.post(
+        "/public/emergency-profile/token-bello-public/contact-push",
+        json={
+            "email": contact_email,
+            "endpoint": endpoint,
+            "p256dh": "test-p256dh-key",
+            "auth": "test-auth-key",
+            "userAgent": "TestBrowser/1.0",
+        },
+    )
+    assert subscribe_response.status_code == status.HTTP_200_OK
+    assert subscribe_response.json() == {"success": True}
+
+    status_response = client.get(
+        f"/public/emergency-profile/token-bello-public/contact-push?email={contact_email}"
+    )
+    assert status_response.status_code == status.HTTP_200_OK
+    assert status_response.json() == {
+        "email": contact_email.lower(),
+        "endpoints": [endpoint],
+    }
+
+    wrong_email_revoke = client.request(
+        "DELETE",
+        "/public/emergency-profile/token-bello-public/contact-push",
+        json={"email": "wrong@example.com", "endpoint": endpoint},
+    )
+    assert wrong_email_revoke.status_code == status.HTTP_403_FORBIDDEN
+
+    revoke_response = client.request(
+        "DELETE",
+        "/public/emergency-profile/token-bello-public/contact-push",
+        json={"email": contact_email, "endpoint": endpoint},
+    )
+    assert revoke_response.status_code == status.HTTP_200_OK
+    assert revoke_response.json() == {"success": True}
+
+    session = get_session_factory()()
+    try:
+        subscription = session.scalar(
+            select(ContactPushSubscription).where(ContactPushSubscription.endpoint == endpoint)
+        )
+        assert subscription is not None
+        assert subscription.email == contact_email.lower()
+        assert subscription.revoked_at is not None
+    finally:
+        session.close()
+
+
+def test_contact_push_email_global_delivery_allows_other_owner_dispatch(
+    client,
+    monkeypatch,
+    test_database_url: str,
+):
+    del test_database_url
+    profile_response = client.get("/public/emergency-profile/token-bello-public")
+    assert profile_response.status_code == status.HTTP_200_OK
+    shared_contact_email = profile_response.json()["contacts"][0]["email"]
+    endpoint = "https://push.example.com/sub/contact-shared"
+
+    subscribe_response = client.post(
+        "/public/emergency-profile/token-bello-public/contact-push",
+        json={
+            "email": shared_contact_email,
+            "endpoint": endpoint,
+            "p256dh": "shared-p256dh-key",
+            "auth": "shared-auth-key",
+            "userAgent": "SharedBrowser/1.0",
+        },
+    )
+    assert subscribe_response.status_code == status.HTTP_200_OK
+
+    webpush_calls: list[str] = []
+
+    def fake_webpush(*args, **kwargs):
+        webpush_calls.append(kwargs["subscription"]["endpoint"])
+
+    monkeypatch.setattr(
+        "app.services.contact_push.get_settings",
+        lambda: SimpleNamespace(
+            vapid_private_key="test-private-key",
+            vapid_public_key="test-public-key",
+            vapid_subject="mailto:test@example.com",
+        ),
+    )
+    monkeypatch.setattr("app.services.contact_push.webpush", fake_webpush)
+    monkeypatch.setattr(
+        "app.services.notification_dispatcher.send_push_to_owner",
+        lambda *a, **kw: PushResult(success_count=1, failure_count=0),
+    )
+    monkeypatch.setattr("app.services.notification_dispatcher.send_email", lambda **kwargs: None)
+
+    second_owner_id = _create_owner()
+    _add_pet_and_contact(
+        owner_id=second_owner_id,
+        access_token="token-second-owner-public",
+        contact_email=shared_contact_email,
+    )
+
+    session = get_session_factory()()
+    try:
+        config = session.scalar(select(CheckInConfig).where(CheckInConfig.owner_id == second_owner_id))
+        assert config is not None
+        config.next_scheduled_at = datetime.now(UTC) - timedelta(minutes=45)
+        config.escalation_delay_minutes = 15
+        session.commit()
+
+        from app.services.notification_dispatcher import dispatch_notifications
+
+        dispatch_notifications(session)
+
+        assert webpush_calls == [endpoint]
+    finally:
+        session.close()
+
+
 def test_dispatcher_real_push_called_when_enabled(monkeypatch, test_database_url: str):
     del test_database_url
     push_calls: list[tuple[str, str, str]] = []
@@ -355,3 +501,57 @@ def _create_owner() -> str:
 
 def _auth_headers(owner_id: str) -> dict[str, str]:
     return {"Authorization": f"Bearer {create_access_token(owner_id)}"}
+
+
+def _add_pet_and_contact(owner_id: str, access_token: str, contact_email: str) -> None:
+    session = get_session_factory()()
+    try:
+        pet_id = f"pet-{uuid4().hex[:8]}"
+        contact_id = f"contact-{uuid4().hex[:8]}"
+        session.add(
+            Pet(
+                id=pet_id,
+                owner_id=owner_id,
+                name="Milo",
+                breed="Mischling",
+                age_years=4,
+                weight_kg=18.0,
+                chip_number=f"chip-{uuid4().hex[:8]}",
+                address="Teststrasse 1, Berlin",
+                pre_existing_conditions="Keine",
+                allergies="Keine",
+                medications="Keine",
+                vaccination_status="Aktuell",
+                insurance="Vorhanden",
+                veterinarian_name="Dr. Test",
+                veterinarian_phone="+49 30 123456",
+                feeding_notes="2x taeglich",
+                special_needs="Keine",
+                spare_key_location="Beim Nachbarn",
+                emergency_access_token=access_token,
+            )
+        )
+        session.add(
+            EmergencyContact(
+                id=contact_id,
+                owner_id=owner_id,
+                name="Shared Contact",
+                relationship_label="Freund",
+                phone="+49 170 0000000",
+                email=contact_email,
+                has_apartment_key=True,
+                can_take_dog=True,
+                notes="Kann helfen",
+            )
+        )
+        session.add(
+            EmergencyChainEntry(
+                id=f"entry-{contact_id}",
+                owner_id=owner_id,
+                contact_id=contact_id,
+                priority=1,
+            )
+        )
+        session.commit()
+    finally:
+        session.close()

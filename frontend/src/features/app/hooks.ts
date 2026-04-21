@@ -10,6 +10,7 @@ import {
 
 import {
   acknowledgeCheckIn,
+  getContactPushStatus,
   acknowledgePublicCheckIn,
   deleteEmergencyContact,
   deletePet,
@@ -45,6 +46,8 @@ import {
 import { appQueryKeys } from "@/features/app/query-keys";
 import type {
   CheckInConfig,
+  ContactPushStatusInput,
+  ContactPushUnsubscribeInput,
   EmergencyChainContact,
   EmergencyContactInput,
   MoveDirection,
@@ -409,9 +412,17 @@ export function useSubscribeContactPushMutation() {
   });
 }
 
+export function useContactPushStatusQuery(input: ContactPushStatusInput, enabled: boolean) {
+  return useQuery({
+    queryKey: ["public-contact-push-status", input.token, input.email],
+    queryFn: () => getContactPushStatus(input),
+    enabled,
+  });
+}
+
 export function useUnsubscribeContactPushMutation() {
   return useMutation({
-    mutationFn: (endpoint: string) => unsubscribeContactPush(endpoint),
+    mutationFn: (input: ContactPushUnsubscribeInput) => unsubscribeContactPush(input),
   });
 }
 

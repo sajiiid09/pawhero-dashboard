@@ -231,7 +231,7 @@ export function EmergencyProfilePage({
             ) : null}
 
             {/* Contact push notifications (public only) */}
-            {isPublic ? <ContactPushCard /> : null}
+            {isPublic ? <ContactPushCard token={token!} /> : null}
 
             {/* Contacts */}
             <article className="rounded-[28px] border border-border-soft bg-white p-7">

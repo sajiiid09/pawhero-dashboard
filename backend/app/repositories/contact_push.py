@@ -58,9 +58,14 @@ def list_active_by_email(session: Session, email: str) -> list[ContactPushSubscr
     )
 
 
-def revoke_by_endpoint(session: Session, endpoint: str) -> bool:
+def list_active_endpoints_by_email(session: Session, email: str) -> list[str]:
+    return [subscription.endpoint for subscription in list_active_by_email(session, email)]
+
+
+def revoke_by_email_and_endpoint(session: Session, email: str, endpoint: str) -> bool:
     sub = session.scalar(
         select(ContactPushSubscription).where(
+            ContactPushSubscription.email == email,
             ContactPushSubscription.endpoint == endpoint,
             ContactPushSubscription.revoked_at.is_(None),
         )

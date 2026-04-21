@@ -15,6 +15,10 @@ from app.services.push import PushResult
 logger = logging.getLogger(__name__)
 
 
+def normalize_contact_email(email: str) -> str:
+    return email.lower().strip()
+
+
 def save_contact_subscription(
     session: Session,
     *,
@@ -24,10 +28,12 @@ def save_contact_subscription(
     auth: str,
     user_agent: str | None,
 ) -> ContactPushSubscription:
+    normalized_email = normalize_contact_email(email)
+    logger.info("saving contact push subscription email=%s endpoint=%s", normalized_email, endpoint)
     return contact_push_repo.upsert_subscription(
         session,
         sub_id=generate_id(),
-        email=email.lower().strip(),
+        email=normalized_email,
         endpoint=endpoint,
         p256dh=p256dh,
         auth=auth,
@@ -35,8 +41,23 @@ def save_contact_subscription(
     )
 
 
-def revoke_contact_subscription(session: Session, endpoint: str) -> bool:
-    return contact_push_repo.revoke_by_endpoint(session, endpoint)
+def list_contact_push_endpoints(session: Session, email: str) -> list[str]:
+    normalized_email = normalize_contact_email(email)
+    return contact_push_repo.list_active_endpoints_by_email(session, normalized_email)
+
+
+def revoke_contact_subscription(session: Session, *, email: str, endpoint: str) -> bool:
+    normalized_email = normalize_contact_email(email)
+    found = contact_push_repo.revoke_by_email_and_endpoint(session, normalized_email, endpoint)
+    if found:
+        logger.info("revoked contact push subscription email=%s endpoint=%s", normalized_email, endpoint)
+    else:
+        logger.info(
+            "contact push subscription not found for revoke email=%s endpoint=%s",
+            normalized_email,
+            endpoint,
+        )
+    return found
 
 
 def send_push_to_contact(
@@ -56,9 +77,10 @@ def send_push_to_contact(
         logger.warning("VAPID keys not configured, skipping contact push delivery")
         return PushResult(failure_count=1, failure_reason="vapid_not_configured")
 
-    subs = contact_push_repo.list_active_by_email(session, email.lower().strip())
+    normalized_email = normalize_contact_email(email)
+    subs = contact_push_repo.list_active_by_email(session, normalized_email)
     if not subs:
-        logger.info("no active contact push subscriptions for email=%s", email)
+        logger.info("no active contact push subscriptions for email=%s", normalized_email)
         return PushResult(failure_count=1, failure_reason="no_active_subscriptions")
 
     payload = json.dumps(
@@ -77,7 +99,7 @@ def send_push_to_contact(
     failure = 0
     logger.info(
         "sending contact push email=%s active_subscriptions=%d",
-        email,
+        normalized_email,
         len(subs),
     )
 
@@ -112,7 +134,7 @@ def send_push_to_contact(
 
     logger.info(
         "contact push finished email=%s success=%d failure=%d",
-        email,
+        normalized_email,
         success,
         failure,
     )

@@ -1,15 +1,17 @@
 "use client";
 
 import { Bell, BellOff, Smartphone } from "lucide-react";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
+  useContactPushStatusQuery,
   useSubscribeContactPushMutation,
   useUnsubscribeContactPushMutation,
   useVapidPublicKeyQuery,
 } from "@/features/app/hooks";
+import { ApiError } from "@/lib/api-client";
 import { useHydrated } from "@/lib/use-hydrated";
 
 type PushState =
@@ -18,8 +20,9 @@ type PushState =
   | "permission-denied"
   | "default"
   | "subscribing"
-  | "subscribed"
-  | "error";
+  | "subscribed";
+
+const CONTACT_PUSH_EMAIL_STORAGE_KEY = "pawhero:contact-push-email";
 
 function detectPushState(): PushState {
   if (typeof navigator === "undefined") return "unsupported";
@@ -29,7 +32,8 @@ function detectPushState(): PushState {
   const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
   const isStandalone =
     window.matchMedia("(display-mode: standalone)").matches ||
-    ("navigator" in window && (navigator as unknown as { standalone?: boolean }).standalone === true);
+    ("navigator" in window &&
+      (navigator as unknown as { standalone?: boolean }).standalone === true);
   if (isIOS && !isStandalone) return "ios-not-installed";
 
   if (Notification.permission === "denied") return "permission-denied";
@@ -47,22 +51,101 @@ function urlBase64ToArrayBuffer(base64String: string): ArrayBuffer {
   return output.buffer;
 }
 
-export function ContactPushCard() {
+function normalizeEmail(email: string) {
+  return email.trim().toLowerCase();
+}
+
+export function ContactPushCard({ token }: { token: string }) {
   const { data: vapidData } = useVapidPublicKeyQuery();
   const subscribeMutation = useSubscribeContactPushMutation();
   const unsubscribeMutation = useUnsubscribeContactPushMutation();
 
   const [email, setEmail] = useState("");
+  const [storedEmail, setStoredEmail] = useState<string | null>(null);
+  const [currentDeviceEndpoint, setCurrentDeviceEndpoint] = useState<string | null>(null);
+  const [isDeviceStateReady, setIsDeviceStateReady] = useState(false);
   const [localPushState, setLocalPushState] = useState<PushState | null>(null);
   const [localError, setLocalError] = useState<string | null>(null);
 
   const hydrated = useHydrated();
 
+  const {
+    data: contactPushStatus,
+    error: contactPushStatusError,
+    refetch: refetchContactPushStatus,
+  } = useContactPushStatusQuery(
+    { token, email: storedEmail ?? "" },
+    hydrated && Boolean(token) && Boolean(storedEmail),
+  );
+
+  useEffect(() => {
+    if (!hydrated || typeof window === "undefined") {
+      return;
+    }
+
+    const savedEmail = window.localStorage.getItem(CONTACT_PUSH_EMAIL_STORAGE_KEY);
+    if (savedEmail) {
+      const normalizedEmail = normalizeEmail(savedEmail);
+      setStoredEmail(normalizedEmail);
+      setEmail(normalizedEmail);
+    }
+  }, [hydrated]);
+
+  const syncCurrentDeviceEndpoint = useCallback(async () => {
+    if (typeof window === "undefined" || !("serviceWorker" in navigator)) {
+      setCurrentDeviceEndpoint(null);
+      setIsDeviceStateReady(true);
+      return null;
+    }
+
+    try {
+      const registration = await navigator.serviceWorker.ready;
+      const subscription = await registration.pushManager.getSubscription();
+      const endpoint = subscription?.endpoint ?? null;
+      setCurrentDeviceEndpoint(endpoint);
+      return endpoint;
+    } catch {
+      setCurrentDeviceEndpoint(null);
+      return null;
+    } finally {
+      setIsDeviceStateReady(true);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!hydrated) {
+      return;
+    }
+
+    void syncCurrentDeviceEndpoint();
+  }, [hydrated, syncCurrentDeviceEndpoint]);
+
+  useEffect(() => {
+    if (!storedEmail) {
+      return;
+    }
+    if (!(contactPushStatusError instanceof ApiError)) {
+      return;
+    }
+    if (![400, 403, 404].includes(contactPushStatusError.status)) {
+      return;
+    }
+
+    window.localStorage.removeItem(CONTACT_PUSH_EMAIL_STORAGE_KEY);
+    setStoredEmail(null);
+  }, [contactPushStatusError, storedEmail]);
+
+  const isCurrentDeviceSubscribed = Boolean(
+    currentDeviceEndpoint &&
+      contactPushStatus?.endpoints.includes(currentDeviceEndpoint),
+  );
+
   const pushState: PushState = useMemo(() => {
     if (!hydrated) return "default";
     if (localPushState !== null) return localPushState;
+    if (isCurrentDeviceSubscribed) return "subscribed";
     return detectPushState();
-  }, [hydrated, localPushState]);
+  }, [hydrated, isCurrentDeviceSubscribed, localPushState]);
 
   const handleSubscribe = useCallback(async () => {
     if (!vapidData?.publicKey) {
@@ -70,8 +153,8 @@ export function ContactPushCard() {
       return;
     }
 
-    const trimmed = email.trim();
-    if (!trimmed) {
+    const normalizedEmail = normalizeEmail(email);
+    if (!normalizedEmail) {
       setLocalError("Bitte gib deine E-Mail-Adresse ein.");
       return;
     }
@@ -118,14 +201,20 @@ export function ContactPushCard() {
       }
 
       await subscribeMutation.mutateAsync({
-        email: trimmed,
+        token,
+        email: normalizedEmail,
         endpoint: subscription.endpoint,
         p256dh: keys.p256dh,
         auth: keys.auth,
         userAgent: navigator.userAgent,
       });
 
-      setLocalPushState("subscribed");
+      window.localStorage.setItem(CONTACT_PUSH_EMAIL_STORAGE_KEY, normalizedEmail);
+      setStoredEmail(normalizedEmail);
+      setEmail(normalizedEmail);
+      setCurrentDeviceEndpoint(subscription.endpoint);
+      await refetchContactPushStatus();
+      setLocalPushState(null);
     } catch (err) {
       if (Notification.permission === "denied") {
         setLocalPushState("permission-denied");
@@ -134,24 +223,44 @@ export function ContactPushCard() {
         setLocalPushState("default");
       }
     }
-  }, [email, subscribeMutation, vapidData]);
+  }, [email, refetchContactPushStatus, subscribeMutation, token, vapidData]);
 
-  const handleUnsubscribe = useCallback(async () => {
-    try {
-      const registration = await navigator.serviceWorker.ready;
-      const pushSub = await registration.pushManager.getSubscription();
-      if (pushSub) {
-        await unsubscribeMutation.mutateAsync(pushSub.endpoint);
-        await pushSub.unsubscribe();
-      }
+  const handleDeactivate = useCallback(async () => {
+    const normalizedEmail = storedEmail ?? normalizeEmail(email);
+    const endpoint = currentDeviceEndpoint;
+    if (!normalizedEmail || !endpoint) {
+      window.localStorage.removeItem(CONTACT_PUSH_EMAIL_STORAGE_KEY);
+      setStoredEmail(null);
       setLocalPushState(null);
+      return;
+    }
+
+    try {
+      await unsubscribeMutation.mutateAsync({
+        token,
+        email: normalizedEmail,
+        endpoint,
+      });
+
+      window.localStorage.removeItem(CONTACT_PUSH_EMAIL_STORAGE_KEY);
+      setStoredEmail(null);
+      setCurrentDeviceEndpoint(null);
+      await refetchContactPushStatus();
       setLocalError(null);
+      setLocalPushState(null);
     } catch (err) {
       setLocalError(err instanceof Error ? err.message : "Abmeldung fehlgeschlagen.");
     }
-  }, [unsubscribeMutation]);
+  }, [
+    currentDeviceEndpoint,
+    email,
+    refetchContactPushStatus,
+    storedEmail,
+    token,
+    unsubscribeMutation,
+  ]);
 
-  if (!hydrated) {
+  if (!hydrated || !isDeviceStateReady) {
     return (
       <div className="rounded-[28px] border border-border-soft bg-white p-7">
         <div className="flex items-center gap-2 text-primary">
@@ -213,7 +322,6 @@ export function ContactPushCard() {
     );
   }
 
-  // Already subscribed state
   if (pushState === "subscribed") {
     return (
       <div className="rounded-[28px] border border-success/20 bg-[linear-gradient(180deg,#f0fdf4,#fff)] p-7">
@@ -225,24 +333,22 @@ export function ContactPushCard() {
           <Badge tone="success">Aktiv</Badge>
         </div>
         <p className="mt-3 text-sm leading-7 text-text-muted">
-          Du erhaelst nun Push-Benachrichtigungen, wenn eine Eskalation startet und du als
-          Kontaktperson benachrichtigt wirst.
+          Dieses Geraet ist fuer Push-Benachrichtigungen auf dieser Notfallseite registriert.
         </p>
         <Button
           variant="secondary"
           size="sm"
           className="mt-4"
-          onClick={handleUnsubscribe}
+          onClick={handleDeactivate}
           disabled={unsubscribeMutation.isPending}
         >
           <BellOff className="mr-1 h-3.5 w-3.5" />
-          Push deaktivieren
+          Push fuer diese Seite deaktivieren
         </Button>
       </div>
     );
   }
 
-  // Default: show subscribe form
   return (
     <div className="rounded-[28px] border border-border-soft bg-white p-7">
       <div className="flex items-center gap-2 text-primary">
@@ -253,15 +359,15 @@ export function ContactPushCard() {
       </div>
       <p className="mt-3 text-sm leading-7 text-text-muted">
         Aktiviere Push, um bei einer Eskalation sofort auf deinem Geraet benachrichtigt zu
-        werden — auch wenn du deine E-Mails nicht pruefst.
+        werden. Die E-Mail-Adresse muss mit einer Kontaktperson auf dieser Seite uebereinstimmen.
       </p>
       <div className="mt-4 space-y-3">
         <input
           type="email"
           required
-          placeholder="Deine E-Mail-Adresse"
+          placeholder="Deine Kontakt-E-Mail-Adresse"
           value={email}
-          onChange={(e) => setEmail(e.target.value)}
+          onChange={(event) => setEmail(event.target.value)}
           className="w-full rounded-[16px] border border-border-soft bg-white px-4 py-3 text-sm font-medium text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
         />
         <Button

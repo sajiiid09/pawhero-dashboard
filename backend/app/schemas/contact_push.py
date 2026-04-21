@@ -11,5 +11,15 @@ class ContactPushSubscribeRequest(AppSchema):
     user_agent: str | None = Field(alias="userAgent", default=None)
 
 
+class ContactPushStatusRequest(AppSchema):
+    email: str
+
+
 class ContactPushUnsubscribeRequest(AppSchema):
+    email: str
     endpoint: str
+
+
+class ContactPushStatusDTO(AppSchema):
+    email: str
+    endpoints: list[str]
