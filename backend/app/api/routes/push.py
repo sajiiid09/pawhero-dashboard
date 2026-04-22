@@ -3,6 +3,7 @@ from fastapi import APIRouter, HTTPException, status
 from app.api.dependencies import DbSession, OwnerId
 from app.core.config import get_settings
 from app.schemas.push import (
+    PushDiagnosticsDTO,
     PushPreviewResultDTO,
     PushSubscriptionDTO,
     SavePushSubscriptionRequest,
@@ -61,3 +62,8 @@ def send_push_preview(session: DbSession, owner_id: OwnerId) -> PushPreviewResul
     result = push_service.send_push_preview(session, owner_id)
     session.commit()
     return result
+
+
+@router.get("/diagnostics", response_model=PushDiagnosticsDTO)
+def read_push_diagnostics(session: DbSession, owner_id: OwnerId) -> PushDiagnosticsDTO:
+    return push_service.get_push_diagnostics(session, owner_id)

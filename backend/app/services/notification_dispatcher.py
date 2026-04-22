@@ -33,6 +33,18 @@ logger = logging.getLogger(__name__)
 
 CONTACT_NOTIFY_GAP = timedelta(minutes=30)
 
+PUSH_ERROR_VAPID_NOT_CONFIGURED = "Push-Zustellung nicht moeglich: VAPID-Konfiguration fehlt."
+PUSH_ERROR_NO_ACTIVE_SUBSCRIPTIONS = "Push-Zustellung fehlgeschlagen: Keine aktiven Push-Abonnements fuer diesen Account."
+PUSH_ERROR_DELIVERY_FAILED = (
+    "Push-Zustellung fehlgeschlagen. Pruefe Endpunkt und Browser-Berechtigung."
+)
+PUSH_ERROR_PARTIAL_DELIVERY = (
+    "Push-Zustellung teilweise fehlgeschlagen. Mindestens ein Geraet konnte nicht erreicht werden."
+)
+PUSH_ERROR_MISSING_CHECK_IN_TARGET = (
+    "Push-Zustellung nicht moeglich: Check-In-Link konnte nicht erzeugt werden."
+)
+
 
 def dispatch_notifications(session: Session) -> None:
     """Check all owners with check-in configs and send notifications if needed."""
@@ -87,14 +99,13 @@ def _send_pending_notifications(session: Session, config: CheckInConfig) -> None
             cycle_key=cycle_key,
             notification_type=NotificationType.OWNER_REMINDER,
             channel=NotificationChannel.PUSH,
+            statuses=("sent",),
         )
         is None
     ):
         if check_in_url is None:
             push_status = "failed"
-            push_error = (
-                "Push-Zustellung nicht moeglich: Check-In-Link konnte nicht erzeugt werden."
-            )
+            push_error = PUSH_ERROR_MISSING_CHECK_IN_TARGET
         else:
             push_result = send_push_to_owner(
                 session,
@@ -102,6 +113,7 @@ def _send_pending_notifications(session: Session, config: CheckInConfig) -> None
                 title="Check-In erforderlich",
                 body="Bitte bestaetige jetzt, dass alles in Ordnung ist.",
                 url=check_in_url,
+                category="check_in",
                 tag=f"owner-reminder:{config.owner_id}:{cycle_key}",
             )
             push_status = "sent" if push_result.success_count > 0 else "failed"
@@ -131,6 +143,7 @@ def _send_pending_notifications(session: Session, config: CheckInConfig) -> None
             cycle_key=cycle_key,
             notification_type=NotificationType.OWNER_REMINDER,
             channel=NotificationChannel.EMAIL,
+            statuses=("sent",),
         )
         is None
     ):
@@ -188,6 +201,7 @@ def _send_escalation_alerts(
             active_escalation.id,
             notification_type=NotificationType.OWNER_ESCALATION,
             channel=NotificationChannel.EMAIL,
+            statuses=("sent",),
         )
         if not owner_alerts:
             subject, body = build_owner_escalation_email(
@@ -209,41 +223,47 @@ def _send_escalation_alerts(
             )
             did_change = True
 
-            if config.push_enabled:
-                if check_in_url is None:
-                    push_status = "failed"
-                    push_error = (
-                        "Push-Zustellung nicht moeglich: Check-In-Link konnte nicht erzeugt werden."
-                    )
-                else:
-                    push_result = send_push_to_owner(
-                        session,
-                        config.owner_id,
-                        title="Eskalation aktiv",
-                        body=f"Check-In fuer {primary_pet.name} wurde verpasst. "
-                        "Notfallkette gestartet.",
-                        url=check_in_url,
-                        tag=f"owner-escalation:{active_escalation.id}",
-                    )
-                    push_status = "sent" if push_result.success_count > 0 else "failed"
-                    push_error = _build_push_error_message(push_result)
-                _log_notification(
+        owner_push_alerts = notification_repo.find_notifications_for_escalation(
+            session,
+            active_escalation.id,
+            notification_type=NotificationType.OWNER_ESCALATION,
+            channel=NotificationChannel.PUSH,
+            statuses=("sent",),
+        )
+        if config.push_enabled and not owner_push_alerts:
+            if check_in_url is None:
+                push_status = "failed"
+                push_error = PUSH_ERROR_MISSING_CHECK_IN_TARGET
+            else:
+                push_result = send_push_to_owner(
                     session,
-                    owner_id=config.owner_id,
-                    escalation_event_id=active_escalation.id,
-                    recipient_email=owner.email,
-                    channel=NotificationChannel.PUSH,
-                    notification_type=NotificationType.OWNER_ESCALATION,
-                    status=push_status,
-                    error_message=push_error,
+                    config.owner_id,
+                    title="Eskalation aktiv",
+                    body=f"Check-In fuer {primary_pet.name} wurde verpasst. "
+                    "Notfallkette gestartet.",
+                    url=check_in_url,
+                    category="check_in",
+                    tag=f"owner-escalation:{active_escalation.id}",
                 )
-                if push_status == "failed":
-                    logger.warning(
-                        "owner escalation push failed owner_id=%s reason=%s",
-                        config.owner_id,
-                        push_error,
-                    )
-                did_change = True
+                push_status = "sent" if push_result.success_count > 0 else "failed"
+                push_error = _build_push_error_message(push_result)
+            _log_notification(
+                session,
+                owner_id=config.owner_id,
+                escalation_event_id=active_escalation.id,
+                recipient_email=owner.email,
+                channel=NotificationChannel.PUSH,
+                notification_type=NotificationType.OWNER_ESCALATION,
+                status=push_status,
+                error_message=push_error,
+            )
+            if push_status == "failed":
+                logger.warning(
+                    "owner escalation push failed owner_id=%s reason=%s",
+                    config.owner_id,
+                    push_error,
+                )
+            did_change = True
 
     contacts = list_ordered_contacts(session, config.owner_id)
     if not contacts or primary_pet is None or public_profile_url is None:
@@ -299,6 +319,7 @@ def _send_escalation_alerts(
                 f"Du bist Kontakt {next_index + 1} von {len(contacts)}."
             ),
             url=public_profile_url,
+            category="emergency_profile",
         )
         push_status = "sent" if push_result.success_count > 0 else "failed"
         _log_notification(
@@ -364,6 +385,7 @@ def _find_cycle_notification(
     cycle_key: str,
     notification_type: NotificationType,
     channel: NotificationChannel,
+    statuses: tuple[str, ...] | None = None,
 ):
     return notification_repo.find_notification_for_cycle(
         session,
@@ -371,6 +393,7 @@ def _find_cycle_notification(
         cycle_key,
         notification_type=notification_type,
         channel=channel,
+        statuses=statuses,
     )
 
 
@@ -450,14 +473,17 @@ def _log_notification(
 
 
 def _build_push_error_message(result: PushResult) -> str | None:
+    if result.failure_reason == "partial_delivery":
+        return PUSH_ERROR_PARTIAL_DELIVERY
+
     if result.success_count > 0:
         return None
 
     if result.failure_reason == "vapid_not_configured":
-        return "Push-Zustellung nicht moeglich: VAPID-Konfiguration fehlt."
+        return PUSH_ERROR_VAPID_NOT_CONFIGURED
     if result.failure_reason == "no_active_subscriptions":
-        return "Keine aktiven Push-Abonnements fuer diesen Account."
+        return PUSH_ERROR_NO_ACTIVE_SUBSCRIPTIONS
     if result.failure_reason == "delivery_failed":
-        return "Push-Zustellung fehlgeschlagen. Pruefe Endpunkt und Browser-Berechtigung."
+        return PUSH_ERROR_DELIVERY_FAILED
 
-    return "Push-Zustellung fehlgeschlagen."
+    return PUSH_ERROR_DELIVERY_FAILED

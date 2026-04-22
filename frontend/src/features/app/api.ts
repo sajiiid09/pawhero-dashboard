@@ -14,6 +14,7 @@ import type {
   PetInput,
   PublicCheckInAckResponse,
   PublicCheckInStatus,
+  PushDiagnostics,
   PushPreviewResult,
   PushSubscriptionInput,
   PushSubscriptionItem,
@@ -211,6 +212,10 @@ export function revokePushSubscription(input: PushSubscriptionInput) {
 
 export function sendPushPreview() {
   return apiRequest<PushPreviewResult>("/push/preview", { method: "POST" });
+}
+
+export function getPushDiagnostics() {
+  return apiRequest<PushDiagnostics>("/push/diagnostics");
 }
 
 export function getPublicCheckInStatus(token: string) {

@@ -6,13 +6,19 @@ from dataclasses import dataclass
 from urllib.parse import urlparse
 
 from pywebpush import WebPushException, webpush
+from sqlalchemy import desc, select
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
-from app.db.models import CheckInConfig, PushSubscription
+from app.db.models import CheckInConfig, NotificationChannel, NotificationLog, PushSubscription
 from app.repositories import push as push_repo
 from app.repositories.check_in import get_check_in_config
-from app.schemas.push import PushPreviewResultDTO, PushSubscriptionDTO
+from app.schemas.push import (
+    PushDiagnosticsDTO,
+    PushLogDiagnosticsDTO,
+    PushPreviewResultDTO,
+    PushSubscriptionDTO,
+)
 from app.services.auth import generate_id
 from app.services.check_in_action_token import generate_action_token
 
@@ -94,6 +100,7 @@ def send_push_to_owner(
     body: str,
     url: str = "/dashboard",
     *,
+    category: str = "generic",
     tag: str | None = None,
     renotify: bool = False,
     require_interaction: bool = True,
@@ -114,6 +121,7 @@ def send_push_to_owner(
             title=title,
             body=body,
             url=url,
+            category=category,
             tag=tag,
             renotify=renotify,
             require_interaction=require_interaction,
@@ -183,6 +191,7 @@ def send_push_preview(session: Session, owner_id: str) -> PushPreviewResultDTO:
         title="Check-In Erinnerung",
         body="Bitte bestaetige jetzt direkt, dass alles in Ordnung ist.",
         url=target_url,
+        category="check_in",
         tag=f"owner-preview:{owner_id}",
     )
     return PushPreviewResultDTO(
@@ -191,11 +200,51 @@ def send_push_preview(session: Session, owner_id: str) -> PushPreviewResultDTO:
     )
 
 
+def get_push_diagnostics(session: Session, owner_id: str) -> PushDiagnosticsDTO:
+    config = get_check_in_config(session, owner_id)
+    subscriptions = push_repo.list_active_subscriptions(session, owner_id)
+    push_logs = list(
+        session.scalars(
+            select(NotificationLog)
+            .where(
+                NotificationLog.owner_id == owner_id,
+                NotificationLog.channel == NotificationChannel.PUSH,
+            )
+            .order_by(desc(NotificationLog.created_at))
+            .limit(20)
+        )
+    )
+
+    last_success = next((log.created_at.isoformat() for log in push_logs if log.status == "sent"), None)
+    last_failure_log = next((log for log in push_logs if log.status != "sent"), None)
+    last_failure = last_failure_log.created_at.isoformat() if last_failure_log is not None else None
+    last_failure_reason = last_failure_log.error_message if last_failure_log is not None else None
+
+    return PushDiagnosticsDTO(
+        push_enabled=(config.push_enabled if config is not None else False),
+        active_subscription_count=len(subscriptions),
+        last_success_at=last_success,
+        last_failure_at=last_failure,
+        last_failure_reason=last_failure_reason,
+        recent_logs=[
+            PushLogDiagnosticsDTO(
+                id=log.id,
+                notification_type=log.notification_type,
+                status=log.status,
+                error_message=log.error_message,
+                created_at=log.created_at.isoformat(),
+            )
+            for log in push_logs
+        ],
+    )
+
+
 def build_push_payload(
     *,
     title: str,
     body: str,
     url: str,
+    category: str = "generic",
     tag: str | None = None,
     renotify: bool = False,
     require_interaction: bool = True,
@@ -204,6 +253,7 @@ def build_push_payload(
         "title": title,
         "body": body,
         "url": url,
+        "category": category,
         "renotify": renotify,
         "requireInteraction": require_interaction,
     }

@@ -14,4 +14,5 @@ export const appQueryKeys = {
   emergencyProfileRoot: ["emergency-profile"] as const,
   vapidPublicKey: ["vapid-public-key"] as const,
   pushSubscriptions: ["push-subscriptions"] as const,
+  pushDiagnostics: ["push-diagnostics"] as const,
 };

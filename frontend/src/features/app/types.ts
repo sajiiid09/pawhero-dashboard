@@ -114,6 +114,23 @@ export type PushPreviewResult = {
   failureCount: number;
 };
 
+export type PushDiagnosticsLogItem = {
+  id: string;
+  notificationType: string;
+  status: string;
+  errorMessage: string | null;
+  createdAt: string;
+};
+
+export type PushDiagnostics = {
+  pushEnabled: boolean;
+  activeSubscriptionCount: number;
+  lastSuccessAt: string | null;
+  lastFailureAt: string | null;
+  lastFailureReason: string | null;
+  recentLogs: PushDiagnosticsLogItem[];
+};
+
 export type PublicCheckInStatus = {
   mode: string;
   escalationDeadline: string | null;

@@ -10,6 +10,7 @@ def find_notification_for_cycle(
     cycle_start_iso: str,
     notification_type: str,
     channel: str,
+    statuses: tuple[str, ...] | None = None,
 ) -> NotificationLog | None:
     """Check if a notification was already sent for this overdue cycle."""
     from datetime import datetime
@@ -21,6 +22,8 @@ def find_notification_for_cycle(
         NotificationLog.channel == channel,
         NotificationLog.created_at >= cycle_start,
     )
+    if statuses:
+        statement = statement.where(NotificationLog.status.in_(statuses))
     return session.scalar(statement)
 
 
@@ -30,12 +33,15 @@ def find_notifications_for_escalation(
     *,
     notification_type: str | None = None,
     channel: str | None = None,
+    statuses: tuple[str, ...] | None = None,
 ) -> list[NotificationLog]:
     filters = [NotificationLog.escalation_event_id == escalation_event_id]
     if notification_type is not None:
         filters.append(NotificationLog.notification_type == notification_type)
     if channel is not None:
         filters.append(NotificationLog.channel == channel)
+    if statuses is not None:
+        filters.append(NotificationLog.status.in_(statuses))
 
     statement = select(NotificationLog).where(*filters).order_by(NotificationLog.created_at)
     return list(session.scalars(statement))

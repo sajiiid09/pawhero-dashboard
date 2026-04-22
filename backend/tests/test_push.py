@@ -211,6 +211,7 @@ def test_push_preview_endpoint_returns_result(client, auth_headers, monkeypatch)
 
     def fake_send(*args, **kwargs):
         captured["url"] = kwargs["url"]
+        captured["category"] = kwargs["category"]
         return PushResult(success_count=1, failure_count=0)
 
     monkeypatch.setattr("app.services.push.send_push_to_owner", fake_send)
@@ -222,6 +223,7 @@ def test_push_preview_endpoint_returns_result(client, auth_headers, monkeypatch)
     assert data["failureCount"] == 0
     assert "/c/" in captured["url"]
     assert "/check-in" not in captured["url"]
+    assert captured["category"] == "check_in"
 
 
 def test_push_preview_persists_revoked_dead_endpoint(client, monkeypatch):
@@ -272,6 +274,38 @@ def test_push_preview_persists_revoked_dead_endpoint(client, monkeypatch):
     assert second_response.status_code == status.HTTP_200_OK
     assert second_response.json() == {"successCount": 0, "failureCount": 1}
     assert webpush_calls == 1
+
+
+def test_push_diagnostics_include_last_failure_reason(client, auth_headers, monkeypatch):
+    def fake_send(*args, **kwargs):
+        del args, kwargs
+        return PushResult(success_count=0, failure_count=1, failure_reason="no_active_subscriptions")
+
+    monkeypatch.setattr("app.services.notification_dispatcher.send_push_to_owner", fake_send)
+    monkeypatch.setattr("app.services.notification_dispatcher.send_email", lambda **kwargs: None)
+
+    session = get_session_factory()()
+    try:
+        session.query(NotificationLog).filter(NotificationLog.owner_id == "owner-demo").delete()
+        config = session.scalar(select(CheckInConfig).where(CheckInConfig.owner_id == "owner-demo"))
+        assert config is not None
+        config.next_scheduled_at = datetime.now(UTC) - timedelta(minutes=5)
+        config.escalation_delay_minutes = 30
+        session.commit()
+
+        from app.services.notification_dispatcher import dispatch_notifications
+
+        dispatch_notifications(session)
+    finally:
+        session.close()
+
+    response = client.get("/push/diagnostics", headers=auth_headers)
+    assert response.status_code == status.HTTP_200_OK
+    payload = response.json()
+    assert payload["lastFailureReason"] == (
+        "Push-Zustellung fehlgeschlagen: Keine aktiven Push-Abonnements fuer diesen Account."
+    )
+    assert payload["lastFailureAt"] is not None
 
 
 def test_contact_push_subscription_requires_matching_public_contact_email(client):

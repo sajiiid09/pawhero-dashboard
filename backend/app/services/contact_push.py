@@ -10,7 +10,7 @@ from app.core.config import get_settings
 from app.db.models import ContactPushSubscription
 from app.repositories import contact_push as contact_push_repo
 from app.services.auth import generate_id
-from app.services.push import PushResult
+from app.services.push import PushResult, build_push_payload
 
 logger = logging.getLogger(__name__)
 
@@ -67,6 +67,7 @@ def send_push_to_contact(
     body: str,
     url: str = "/dashboard",
     *,
+    category: str = "emergency_profile",
     tag: str | None = None,
     renotify: bool = False,
     require_interaction: bool = True,
@@ -84,14 +85,15 @@ def send_push_to_contact(
         return PushResult(failure_count=1, failure_reason="no_active_subscriptions")
 
     payload = json.dumps(
-        {
-            "title": title,
-            "body": body,
-            "url": url,
-            "renotify": renotify,
-            "requireInteraction": require_interaction,
-            **({"tag": tag} if tag else {}),
-        }
+        build_push_payload(
+            title=title,
+            body=body,
+            url=url,
+            category=category,
+            tag=tag,
+            renotify=renotify,
+            require_interaction=require_interaction,
+        )
     )
     vapid_claims = {"sub": settings.vapid_subject}
 
