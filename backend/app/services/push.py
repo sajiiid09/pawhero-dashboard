@@ -24,6 +24,12 @@ from app.services.check_in_action_token import generate_action_token
 
 logger = logging.getLogger(__name__)
 
+PUSH_FAILURE_VAPID_NOT_CONFIGURED = "vapid_not_configured"
+PUSH_FAILURE_NO_ACTIVE_SUBSCRIPTIONS = "no_active_subscriptions"
+PUSH_FAILURE_DELIVERY_FAILED = "delivery_failed"
+PUSH_FAILURE_PARTIAL_DELIVERY = "partial_delivery"
+PUSH_FAILURE_INTEGRATION_ERROR = "integration_error"
+
 
 @dataclass
 class PushResult:
@@ -71,6 +77,20 @@ def list_subscriptions(session: Session, owner_id: str) -> list[PushSubscription
     return [serialize_push_subscription(sub) for sub in subs]
 
 
+def build_subscription_info(
+    endpoint: str,
+    p256dh: str,
+    auth: str,
+) -> dict[str, str | dict[str, str]]:
+    return {
+        "endpoint": endpoint,
+        "keys": {
+            "p256dh": p256dh,
+            "auth": auth,
+        },
+    }
+
+
 def build_owner_check_in_url(
     session: Session,
     owner_id: str,
@@ -109,12 +129,12 @@ def send_push_to_owner(
 
     if not settings.vapid_private_key or not settings.vapid_public_key:
         logger.warning("VAPID keys not configured, skipping push delivery")
-        return PushResult(failure_count=1, failure_reason="vapid_not_configured")
+        return PushResult(failure_count=1, failure_reason=PUSH_FAILURE_VAPID_NOT_CONFIGURED)
 
     subs = push_repo.list_active_subscriptions(session, owner_id)
     if not subs:
         logger.info("no active push subscriptions for owner_id=%s", owner_id)
-        return PushResult(failure_count=1, failure_reason="no_active_subscriptions")
+        return PushResult(failure_count=1, failure_reason=PUSH_FAILURE_NO_ACTIVE_SUBSCRIPTIONS)
 
     payload = json.dumps(
         build_push_payload(
@@ -131,6 +151,7 @@ def send_push_to_owner(
 
     success = 0
     failure = 0
+    unexpected_error = False
     logger.info(
         "sending owner push owner_id=%s active_subscriptions=%d target=%s tag=%s",
         owner_id,
@@ -142,10 +163,7 @@ def send_push_to_owner(
     for sub in subs:
         try:
             webpush(
-                subscription={
-                    "endpoint": sub.endpoint,
-                    "keys": {"p256dh": sub.p256dh, "auth": sub.auth},
-                },
+                subscription_info=build_subscription_info(sub.endpoint, sub.p256dh, sub.auth),
                 data=payload,
                 vapid_private_key=settings.vapid_private_key,
                 vapid_claims=vapid_claims,
@@ -161,12 +179,15 @@ def send_push_to_owner(
         except Exception:
             logger.exception("unexpected push error for sub %s", sub.id)
             failure += 1
+            unexpected_error = True
 
     failure_reason: str | None = None
     if success == 0 and failure > 0:
-        failure_reason = "delivery_failed"
+        failure_reason = (
+            PUSH_FAILURE_INTEGRATION_ERROR if unexpected_error else PUSH_FAILURE_DELIVERY_FAILED
+        )
     elif success > 0 and failure > 0:
-        failure_reason = "partial_delivery"
+        failure_reason = PUSH_FAILURE_PARTIAL_DELIVERY
 
     logger.info(
         "owner push finished owner_id=%s success=%d failure=%d reason=%s",
@@ -215,7 +236,10 @@ def get_push_diagnostics(session: Session, owner_id: str) -> PushDiagnosticsDTO:
         )
     )
 
-    last_success = next((log.created_at.isoformat() for log in push_logs if log.status == "sent"), None)
+    last_success = next(
+        (log.created_at.isoformat() for log in push_logs if log.status == "sent"),
+        None,
+    )
     last_failure_log = next((log for log in push_logs if log.status != "sent"), None)
     last_failure = last_failure_log.created_at.isoformat() if last_failure_log is not None else None
     last_failure_reason = last_failure_log.error_message if last_failure_log is not None else None

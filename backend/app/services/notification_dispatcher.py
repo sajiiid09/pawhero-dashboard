@@ -27,19 +27,34 @@ from app.services.email import (
     build_reminder_email,
     send_email,
 )
-from app.services.push import PushResult, build_owner_check_in_url, send_push_to_owner
+from app.services.push import (
+    PUSH_FAILURE_DELIVERY_FAILED,
+    PUSH_FAILURE_INTEGRATION_ERROR,
+    PUSH_FAILURE_NO_ACTIVE_SUBSCRIPTIONS,
+    PUSH_FAILURE_PARTIAL_DELIVERY,
+    PUSH_FAILURE_VAPID_NOT_CONFIGURED,
+    PushResult,
+    build_owner_check_in_url,
+    send_push_to_owner,
+)
 
 logger = logging.getLogger(__name__)
 
 CONTACT_NOTIFY_GAP = timedelta(minutes=30)
 
 PUSH_ERROR_VAPID_NOT_CONFIGURED = "Push-Zustellung nicht moeglich: VAPID-Konfiguration fehlt."
-PUSH_ERROR_NO_ACTIVE_SUBSCRIPTIONS = "Push-Zustellung fehlgeschlagen: Keine aktiven Push-Abonnements fuer diesen Account."
+PUSH_ERROR_NO_ACTIVE_SUBSCRIPTIONS = (
+    "Push-Zustellung fehlgeschlagen: Keine aktiven Push-Abonnements fuer diesen Account."
+)
 PUSH_ERROR_DELIVERY_FAILED = (
     "Push-Zustellung fehlgeschlagen. Pruefe Endpunkt und Browser-Berechtigung."
 )
 PUSH_ERROR_PARTIAL_DELIVERY = (
     "Push-Zustellung teilweise fehlgeschlagen. Mindestens ein Geraet konnte nicht erreicht werden."
+)
+PUSH_ERROR_INTEGRATION_ERROR = (
+    "Push-Zustellung nicht moeglich: Interner Web-Push-Fehler im Backend. Deployment und "
+    "Abhaengigkeiten pruefen."
 )
 PUSH_ERROR_MISSING_CHECK_IN_TARGET = (
     "Push-Zustellung nicht moeglich: Check-In-Link konnte nicht erzeugt werden."
@@ -473,17 +488,19 @@ def _log_notification(
 
 
 def _build_push_error_message(result: PushResult) -> str | None:
-    if result.failure_reason == "partial_delivery":
+    if result.failure_reason == PUSH_FAILURE_PARTIAL_DELIVERY:
         return PUSH_ERROR_PARTIAL_DELIVERY
 
     if result.success_count > 0:
         return None
 
-    if result.failure_reason == "vapid_not_configured":
+    if result.failure_reason == PUSH_FAILURE_VAPID_NOT_CONFIGURED:
         return PUSH_ERROR_VAPID_NOT_CONFIGURED
-    if result.failure_reason == "no_active_subscriptions":
+    if result.failure_reason == PUSH_FAILURE_NO_ACTIVE_SUBSCRIPTIONS:
         return PUSH_ERROR_NO_ACTIVE_SUBSCRIPTIONS
-    if result.failure_reason == "delivery_failed":
+    if result.failure_reason == PUSH_FAILURE_INTEGRATION_ERROR:
+        return PUSH_ERROR_INTEGRATION_ERROR
+    if result.failure_reason == PUSH_FAILURE_DELIVERY_FAILED:
         return PUSH_ERROR_DELIVERY_FAILED
 
     return PUSH_ERROR_DELIVERY_FAILED
