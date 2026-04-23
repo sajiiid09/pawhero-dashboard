@@ -26,6 +26,16 @@ vi.mock("@/features/app/hooks", () => ({
     isLoading: false,
     refetch: mockHooks.refetchSubscriptions,
   }),
+  usePushDiagnosticsQuery: () => ({
+    data: {
+      pushEnabled: true,
+      activeSubscriptionCount: mockHooks.subscriptions.length,
+      lastSuccessAt: null,
+      lastFailureAt: null,
+      lastFailureReason: null,
+      recentLogs: [],
+    },
+  }),
   useSavePushSubscriptionMutation: () => ({
     mutateAsync: mockHooks.saveMutateAsync,
     isPending: false,

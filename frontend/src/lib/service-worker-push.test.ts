@@ -8,7 +8,7 @@ type ServiceWorkerListener = (event: {
   data?: { json: () => unknown };
   notification?: {
     close: () => void;
-    data?: { url?: string };
+    data?: { url?: string; category?: string };
     navigate?: string;
   };
   request?: { method?: string };
@@ -81,7 +81,7 @@ async function dispatchNotificationClick(
   handler: ServiceWorkerListener,
   notification: {
     close: () => void;
-    data?: { url?: string };
+    data?: { url?: string; category?: string };
     navigate?: string;
   },
 ) {
@@ -111,6 +111,7 @@ describe("service worker push handling", () => {
       title: "Check-In erforderlich",
       body: "Bitte bestaetige jetzt, dass alles in Ordnung ist.",
       url: "https://app.example.com/c/test-owner-token",
+      category: "check_in",
       tag: "owner-reminder:owner-demo:2026-04-22T00:00:00+00:00",
       renotify: false,
       requireInteraction: true,
@@ -127,7 +128,7 @@ describe("service worker push handling", () => {
         renotify: false,
         requireInteraction: true,
         navigate: payload.url,
-        data: { url: payload.url },
+        data: { url: payload.url, category: payload.category },
       }),
     );
   });
@@ -155,6 +156,39 @@ describe("service worker push handling", () => {
     expect(worker.openWindow).not.toHaveBeenCalled();
   });
 
+  it("opens the emergency-profile target URL for contact escalation notifications", async () => {
+    const clickHandler = worker.listeners.get("notificationclick");
+    expect(clickHandler).toBeDefined();
+
+    const close = vi.fn();
+    const targetUrl = "https://app.example.com/s/test-public-token";
+
+    await dispatchNotificationClick(clickHandler!, {
+      close,
+      data: { url: targetUrl, category: "emergency_profile" },
+    });
+
+    expect(close).toHaveBeenCalled();
+    expect(worker.openWindow).toHaveBeenCalledWith(targetUrl);
+  });
+
+  it("fails closed for malformed check-in payloads instead of routing to the dashboard", async () => {
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const clickHandler = worker.listeners.get("notificationclick");
+    expect(clickHandler).toBeDefined();
+
+    const close = vi.fn();
+    await dispatchNotificationClick(clickHandler!, {
+      close,
+      data: { url: "https://app.example.com/check-in", category: "check_in" },
+    });
+
+    expect(close).toHaveBeenCalled();
+    expect(worker.openWindow).not.toHaveBeenCalled();
+    expect(errorSpy).toHaveBeenCalled();
+    errorSpy.mockRestore();
+  });
+
   it("reuses the same notification tag for repeated pushes in the same owner cycle", async () => {
     const pushHandler = worker.listeners.get("push");
     expect(pushHandler).toBeDefined();
@@ -163,6 +197,7 @@ describe("service worker push handling", () => {
       title: "Check-In erforderlich",
       body: "Bitte bestaetige jetzt, dass alles in Ordnung ist.",
       url: "https://app.example.com/c/test-owner-token",
+      category: "check_in",
       tag: "owner-reminder:owner-demo:2026-04-22T00:00:00+00:00",
       renotify: false,
       requireInteraction: true,

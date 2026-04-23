@@ -1,4 +1,5 @@
 import logging
+from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
@@ -12,9 +13,9 @@ from app.repositories.check_in import get_active_escalation, get_check_in_config
 from app.repositories.emergency_chain import list_ordered_contacts
 from app.repositories.pets import get_pet_by_access_token
 from app.schemas.contact_push import (
-    ContactPushSubscribeRequest,
     ContactPushStatusDTO,
     ContactPushStatusRequest,
+    ContactPushSubscribeRequest,
     ContactPushUnsubscribeRequest,
 )
 from app.schemas.emergency_profile import EmergencyProfileDTO
@@ -267,7 +268,10 @@ def _validate_contact_push_email(session: DbSession, owner_id: str, email: str) 
         )
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Diese E-Mail-Adresse ist nicht als Kontaktperson fuer dieses Profil hinterlegt.",
+            detail=(
+                "Diese E-Mail-Adresse ist nicht als Kontaktperson fuer dieses Profil "
+                "hinterlegt."
+            ),
         )
     return normalized_email
 
@@ -279,7 +283,7 @@ def _validate_contact_push_email(session: DbSession, owner_id: str, email: str) 
 def get_contact_push_status(
     token: str,
     session: DbSession,
-    payload: ContactPushStatusRequest = Depends(),
+    payload: Annotated[ContactPushStatusRequest, Depends()],
 ) -> ContactPushStatusDTO:
     pet = _get_pet_for_public_contact_push(session, token)
     normalized_email = _validate_contact_push_email(session, pet.owner_id, payload.email)

@@ -6,17 +6,29 @@ from dataclasses import dataclass
 from urllib.parse import urlparse
 
 from pywebpush import WebPushException, webpush
+from sqlalchemy import desc, select
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
-from app.db.models import CheckInConfig, PushSubscription
+from app.db.models import CheckInConfig, NotificationChannel, NotificationLog, PushSubscription
 from app.repositories import push as push_repo
 from app.repositories.check_in import get_check_in_config
-from app.schemas.push import PushPreviewResultDTO, PushSubscriptionDTO
+from app.schemas.push import (
+    PushDiagnosticsDTO,
+    PushLogDiagnosticsDTO,
+    PushPreviewResultDTO,
+    PushSubscriptionDTO,
+)
 from app.services.auth import generate_id
 from app.services.check_in_action_token import generate_action_token
 
 logger = logging.getLogger(__name__)
+
+PUSH_FAILURE_VAPID_NOT_CONFIGURED = "vapid_not_configured"
+PUSH_FAILURE_NO_ACTIVE_SUBSCRIPTIONS = "no_active_subscriptions"
+PUSH_FAILURE_DELIVERY_FAILED = "delivery_failed"
+PUSH_FAILURE_PARTIAL_DELIVERY = "partial_delivery"
+PUSH_FAILURE_INTEGRATION_ERROR = "integration_error"
 
 
 @dataclass
@@ -65,6 +77,20 @@ def list_subscriptions(session: Session, owner_id: str) -> list[PushSubscription
     return [serialize_push_subscription(sub) for sub in subs]
 
 
+def build_subscription_info(
+    endpoint: str,
+    p256dh: str,
+    auth: str,
+) -> dict[str, str | dict[str, str]]:
+    return {
+        "endpoint": endpoint,
+        "keys": {
+            "p256dh": p256dh,
+            "auth": auth,
+        },
+    }
+
+
 def build_owner_check_in_url(
     session: Session,
     owner_id: str,
@@ -94,6 +120,7 @@ def send_push_to_owner(
     body: str,
     url: str = "/dashboard",
     *,
+    category: str = "generic",
     tag: str | None = None,
     renotify: bool = False,
     require_interaction: bool = True,
@@ -102,18 +129,19 @@ def send_push_to_owner(
 
     if not settings.vapid_private_key or not settings.vapid_public_key:
         logger.warning("VAPID keys not configured, skipping push delivery")
-        return PushResult(failure_count=1, failure_reason="vapid_not_configured")
+        return PushResult(failure_count=1, failure_reason=PUSH_FAILURE_VAPID_NOT_CONFIGURED)
 
     subs = push_repo.list_active_subscriptions(session, owner_id)
     if not subs:
         logger.info("no active push subscriptions for owner_id=%s", owner_id)
-        return PushResult(failure_count=1, failure_reason="no_active_subscriptions")
+        return PushResult(failure_count=1, failure_reason=PUSH_FAILURE_NO_ACTIVE_SUBSCRIPTIONS)
 
     payload = json.dumps(
         build_push_payload(
             title=title,
             body=body,
             url=url,
+            category=category,
             tag=tag,
             renotify=renotify,
             require_interaction=require_interaction,
@@ -123,6 +151,7 @@ def send_push_to_owner(
 
     success = 0
     failure = 0
+    unexpected_error = False
     logger.info(
         "sending owner push owner_id=%s active_subscriptions=%d target=%s tag=%s",
         owner_id,
@@ -134,10 +163,7 @@ def send_push_to_owner(
     for sub in subs:
         try:
             webpush(
-                subscription={
-                    "endpoint": sub.endpoint,
-                    "keys": {"p256dh": sub.p256dh, "auth": sub.auth},
-                },
+                subscription_info=build_subscription_info(sub.endpoint, sub.p256dh, sub.auth),
                 data=payload,
                 vapid_private_key=settings.vapid_private_key,
                 vapid_claims=vapid_claims,
@@ -153,12 +179,15 @@ def send_push_to_owner(
         except Exception:
             logger.exception("unexpected push error for sub %s", sub.id)
             failure += 1
+            unexpected_error = True
 
     failure_reason: str | None = None
     if success == 0 and failure > 0:
-        failure_reason = "delivery_failed"
+        failure_reason = (
+            PUSH_FAILURE_INTEGRATION_ERROR if unexpected_error else PUSH_FAILURE_DELIVERY_FAILED
+        )
     elif success > 0 and failure > 0:
-        failure_reason = "partial_delivery"
+        failure_reason = PUSH_FAILURE_PARTIAL_DELIVERY
 
     logger.info(
         "owner push finished owner_id=%s success=%d failure=%d reason=%s",
@@ -183,6 +212,7 @@ def send_push_preview(session: Session, owner_id: str) -> PushPreviewResultDTO:
         title="Check-In Erinnerung",
         body="Bitte bestaetige jetzt direkt, dass alles in Ordnung ist.",
         url=target_url,
+        category="check_in",
         tag=f"owner-preview:{owner_id}",
     )
     return PushPreviewResultDTO(
@@ -191,11 +221,54 @@ def send_push_preview(session: Session, owner_id: str) -> PushPreviewResultDTO:
     )
 
 
+def get_push_diagnostics(session: Session, owner_id: str) -> PushDiagnosticsDTO:
+    config = get_check_in_config(session, owner_id)
+    subscriptions = push_repo.list_active_subscriptions(session, owner_id)
+    push_logs = list(
+        session.scalars(
+            select(NotificationLog)
+            .where(
+                NotificationLog.owner_id == owner_id,
+                NotificationLog.channel == NotificationChannel.PUSH,
+            )
+            .order_by(desc(NotificationLog.created_at))
+            .limit(20)
+        )
+    )
+
+    last_success = next(
+        (log.created_at.isoformat() for log in push_logs if log.status == "sent"),
+        None,
+    )
+    last_failure_log = next((log for log in push_logs if log.status != "sent"), None)
+    last_failure = last_failure_log.created_at.isoformat() if last_failure_log is not None else None
+    last_failure_reason = last_failure_log.error_message if last_failure_log is not None else None
+
+    return PushDiagnosticsDTO(
+        push_enabled=(config.push_enabled if config is not None else False),
+        active_subscription_count=len(subscriptions),
+        last_success_at=last_success,
+        last_failure_at=last_failure,
+        last_failure_reason=last_failure_reason,
+        recent_logs=[
+            PushLogDiagnosticsDTO(
+                id=log.id,
+                notification_type=log.notification_type,
+                status=log.status,
+                error_message=log.error_message,
+                created_at=log.created_at.isoformat(),
+            )
+            for log in push_logs
+        ],
+    )
+
+
 def build_push_payload(
     *,
     title: str,
     body: str,
     url: str,
+    category: str = "generic",
     tag: str | None = None,
     renotify: bool = False,
     require_interaction: bool = True,
@@ -204,6 +277,7 @@ def build_push_payload(
         "title": title,
         "body": body,
         "url": url,
+        "category": category,
         "renotify": renotify,
         "requireInteraction": require_interaction,
     }

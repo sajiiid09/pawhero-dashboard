@@ -27,6 +27,7 @@ import {
   getPublicCheckInStatus,
   getPublicEmergencyProfile,
   getPushSubscriptions,
+  getPushDiagnostics,
   getVapidPublicKey,
   getPet,
   getPets,
@@ -364,13 +365,23 @@ export function usePushSubscriptionsQuery() {
   });
 }
 
+export function usePushDiagnosticsQuery() {
+  return useQuery({
+    queryKey: appQueryKeys.pushDiagnostics,
+    queryFn: getPushDiagnostics,
+  });
+}
+
 export function useSavePushSubscriptionMutation() {
   const queryClient = useQueryClient();
 
   return useMutation({
     mutationFn: (input: PushSubscriptionInput) => savePushSubscription(input),
     onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: appQueryKeys.pushSubscriptions });
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: appQueryKeys.pushSubscriptions }),
+        queryClient.invalidateQueries({ queryKey: appQueryKeys.pushDiagnostics }),
+      ]);
     },
   });
 }
@@ -381,14 +392,25 @@ export function useRevokePushSubscriptionMutation() {
   return useMutation({
     mutationFn: (input: PushSubscriptionInput) => revokePushSubscription(input),
     onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: appQueryKeys.pushSubscriptions });
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: appQueryKeys.pushSubscriptions }),
+        queryClient.invalidateQueries({ queryKey: appQueryKeys.pushDiagnostics }),
+      ]);
     },
   });
 }
 
 export function useSendPushPreviewMutation() {
+  const queryClient = useQueryClient();
+
   return useMutation({
     mutationFn: sendPushPreview,
+    onSuccess: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: appQueryKeys.pushDiagnostics }),
+        queryClient.invalidateQueries({ queryKey: appQueryKeys.notifications }),
+      ]);
+    },
   });
 }
 

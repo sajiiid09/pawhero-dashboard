@@ -211,6 +211,7 @@ def test_push_preview_endpoint_returns_result(client, auth_headers, monkeypatch)
 
     def fake_send(*args, **kwargs):
         captured["url"] = kwargs["url"]
+        captured["category"] = kwargs["category"]
         return PushResult(success_count=1, failure_count=0)
 
     monkeypatch.setattr("app.services.push.send_push_to_owner", fake_send)
@@ -222,6 +223,7 @@ def test_push_preview_endpoint_returns_result(client, auth_headers, monkeypatch)
     assert data["failureCount"] == 0
     assert "/c/" in captured["url"]
     assert "/check-in" not in captured["url"]
+    assert captured["category"] == "check_in"
 
 
 def test_push_preview_persists_revoked_dead_endpoint(client, monkeypatch):
@@ -272,6 +274,184 @@ def test_push_preview_persists_revoked_dead_endpoint(client, monkeypatch):
     assert second_response.status_code == status.HTTP_200_OK
     assert second_response.json() == {"successCount": 0, "failureCount": 1}
     assert webpush_calls == 1
+
+
+def test_send_push_to_owner_uses_subscription_info(monkeypatch):
+    owner_id = _create_owner()
+    captured_kwargs: dict[str, object] = {}
+
+    session = get_session_factory()()
+    try:
+        session.add(
+            PushSubscription(
+                id=f"sub-{uuid4().hex[:8]}",
+                owner_id=owner_id,
+                endpoint="https://push.example.com/sub/owner-shape",
+                p256dh="owner-p256dh",
+                auth="owner-auth",
+                user_agent="TestBrowser/1.0",
+                last_seen_at=datetime.now(UTC),
+            )
+        )
+        session.commit()
+
+        def fake_webpush(*args, **kwargs):
+            del args
+            captured_kwargs.update(kwargs)
+
+        monkeypatch.setattr(
+            "app.services.push.get_settings",
+            lambda: SimpleNamespace(
+                vapid_private_key="test-private-key",
+                vapid_public_key="test-public-key",
+                vapid_subject="mailto:test@example.com",
+            ),
+        )
+        monkeypatch.setattr("app.services.push.webpush", fake_webpush)
+
+        from app.services.push import send_push_to_owner
+
+        result = send_push_to_owner(
+            session,
+            owner_id,
+            title="Check-In erforderlich",
+            body="Bitte bestaetige jetzt.",
+            url="https://app.bdtextilehub.com/c/test-token",
+            category="check_in",
+        )
+
+        assert result.success_count == 1
+        assert result.failure_count == 0
+        assert "subscription_info" in captured_kwargs
+        assert "subscription" not in captured_kwargs
+        assert captured_kwargs["subscription_info"] == {
+            "endpoint": "https://push.example.com/sub/owner-shape",
+            "keys": {"p256dh": "owner-p256dh", "auth": "owner-auth"},
+        }
+    finally:
+        session.close()
+
+
+def test_send_push_to_owner_classifies_backend_integration_error(monkeypatch):
+    owner_id = _create_owner()
+
+    session = get_session_factory()()
+    try:
+        session.add(
+            PushSubscription(
+                id=f"sub-{uuid4().hex[:8]}",
+                owner_id=owner_id,
+                endpoint="https://push.example.com/sub/integration-error",
+                p256dh="owner-p256dh",
+                auth="owner-auth",
+                user_agent="TestBrowser/1.0",
+                last_seen_at=datetime.now(UTC),
+            )
+        )
+        session.commit()
+
+        monkeypatch.setattr(
+            "app.services.push.get_settings",
+            lambda: SimpleNamespace(
+                vapid_private_key="test-private-key",
+                vapid_public_key="test-public-key",
+                vapid_subject="mailto:test@example.com",
+            ),
+        )
+        monkeypatch.setattr(
+            "app.services.push.webpush",
+            lambda *args, **kwargs: (_ for _ in ()).throw(TypeError("wrong keyword")),
+        )
+
+        from app.services.push import send_push_to_owner
+
+        result = send_push_to_owner(
+            session,
+            owner_id,
+            title="Check-In erforderlich",
+            body="Bitte bestaetige jetzt.",
+            url="https://app.bdtextilehub.com/c/test-token",
+            category="check_in",
+        )
+
+        assert result.success_count == 0
+        assert result.failure_count == 1
+        assert result.failure_reason == "integration_error"
+    finally:
+        session.close()
+
+
+def test_push_diagnostics_include_last_failure_reason(client, auth_headers, monkeypatch):
+    def fake_send(*args, **kwargs):
+        del args, kwargs
+        return PushResult(
+            success_count=0,
+            failure_count=1,
+            failure_reason="no_active_subscriptions",
+        )
+
+    monkeypatch.setattr("app.services.notification_dispatcher.send_push_to_owner", fake_send)
+    monkeypatch.setattr("app.services.notification_dispatcher.send_email", lambda **kwargs: None)
+
+    session = get_session_factory()()
+    try:
+        session.query(NotificationLog).filter(NotificationLog.owner_id == "owner-demo").delete()
+        config = session.scalar(select(CheckInConfig).where(CheckInConfig.owner_id == "owner-demo"))
+        assert config is not None
+        config.next_scheduled_at = datetime.now(UTC) - timedelta(minutes=5)
+        config.escalation_delay_minutes = 30
+        session.commit()
+
+        from app.services.notification_dispatcher import dispatch_notifications
+
+        dispatch_notifications(session)
+    finally:
+        session.close()
+
+    response = client.get("/push/diagnostics", headers=auth_headers)
+    assert response.status_code == status.HTTP_200_OK
+    payload = response.json()
+    assert payload["lastFailureReason"] == (
+        "Push-Zustellung fehlgeschlagen: Keine aktiven Push-Abonnements fuer diesen Account."
+    )
+    assert payload["lastFailureAt"] is not None
+
+
+def test_push_diagnostics_include_backend_integration_failure_reason(
+    client,
+    auth_headers,
+    monkeypatch,
+):
+    def fake_send(*args, **kwargs):
+        del args, kwargs
+        return PushResult(success_count=0, failure_count=1, failure_reason="integration_error")
+
+    monkeypatch.setattr("app.services.notification_dispatcher.send_push_to_owner", fake_send)
+    monkeypatch.setattr("app.services.notification_dispatcher.send_email", lambda **kwargs: None)
+
+    session = get_session_factory()()
+    try:
+        session.query(NotificationLog).filter(NotificationLog.owner_id == "owner-demo").delete()
+        config = session.scalar(select(CheckInConfig).where(CheckInConfig.owner_id == "owner-demo"))
+        assert config is not None
+        config.next_scheduled_at = datetime.now(UTC) - timedelta(minutes=5)
+        config.escalation_delay_minutes = 30
+        session.commit()
+
+        from app.services.notification_dispatcher import dispatch_notifications
+
+        dispatch_notifications(session)
+    finally:
+        session.close()
+
+    response = client.get("/push/diagnostics", headers=auth_headers)
+    assert response.status_code == status.HTTP_200_OK
+    payload = response.json()
+    assert payload["lastFailureReason"] == (
+        "Push-Zustellung nicht moeglich: Interner Web-Push-Fehler im Backend. Deployment und "
+        "Abhaengigkeiten pruefen."
+    )
+    assert payload["lastFailureAt"] is not None
 
 
 def test_contact_push_subscription_requires_matching_public_contact_email(client):
@@ -370,7 +550,7 @@ def test_contact_push_email_global_delivery_allows_other_owner_dispatch(
     webpush_calls: list[str] = []
 
     def fake_webpush(*args, **kwargs):
-        webpush_calls.append(kwargs["subscription"]["endpoint"])
+        webpush_calls.append(kwargs["subscription_info"]["endpoint"])
 
     monkeypatch.setattr(
         "app.services.contact_push.get_settings",
@@ -396,7 +576,9 @@ def test_contact_push_email_global_delivery_allows_other_owner_dispatch(
 
     session = get_session_factory()()
     try:
-        config = session.scalar(select(CheckInConfig).where(CheckInConfig.owner_id == second_owner_id))
+        config = session.scalar(
+            select(CheckInConfig).where(CheckInConfig.owner_id == second_owner_id)
+        )
         assert config is not None
         config.next_scheduled_at = datetime.now(UTC) - timedelta(minutes=45)
         config.escalation_delay_minutes = 15
@@ -407,6 +589,73 @@ def test_contact_push_email_global_delivery_allows_other_owner_dispatch(
         dispatch_notifications(session)
 
         assert webpush_calls == [endpoint]
+    finally:
+        session.close()
+
+
+def test_send_push_to_contact_uses_subscription_info(client, monkeypatch):
+    profile_response = client.get("/public/emergency-profile/token-bello-public")
+    assert profile_response.status_code == status.HTTP_200_OK
+    contact_email = profile_response.json()["contacts"][0]["email"]
+    endpoint = "https://push.example.com/sub/contact-shape"
+
+    session = get_session_factory()()
+    try:
+        session.query(ContactPushSubscription).filter(
+            ContactPushSubscription.email == contact_email.lower()
+        ).delete()
+        session.commit()
+    finally:
+        session.close()
+
+    subscribe_response = client.post(
+        "/public/emergency-profile/token-bello-public/contact-push",
+        json={
+            "email": contact_email,
+            "endpoint": endpoint,
+            "p256dh": "contact-p256dh",
+            "auth": "contact-auth",
+            "userAgent": "SharedBrowser/1.0",
+        },
+    )
+    assert subscribe_response.status_code == status.HTTP_200_OK
+
+    captured_kwargs: dict[str, object] = {}
+
+    def fake_webpush(*args, **kwargs):
+        del args
+        captured_kwargs.update(kwargs)
+
+    monkeypatch.setattr(
+        "app.services.contact_push.get_settings",
+        lambda: SimpleNamespace(
+            vapid_private_key="test-private-key",
+            vapid_public_key="test-public-key",
+            vapid_subject="mailto:test@example.com",
+        ),
+    )
+    monkeypatch.setattr("app.services.contact_push.webpush", fake_webpush)
+
+    from app.services.contact_push import send_push_to_contact
+
+    session = get_session_factory()()
+    try:
+        result = send_push_to_contact(
+            session,
+            contact_email,
+            title="Notfallprofil",
+            body="Bitte oeffne das Profil.",
+            url="https://app.bdtextilehub.com/s/test-token",
+        )
+
+        assert result.success_count == 1
+        assert result.failure_count == 0
+        assert "subscription_info" in captured_kwargs
+        assert "subscription" not in captured_kwargs
+        assert captured_kwargs["subscription_info"] == {
+            "endpoint": endpoint,
+            "keys": {"p256dh": "contact-p256dh", "auth": "contact-auth"},
+        }
     finally:
         session.close()
 

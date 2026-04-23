@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   usePushSubscriptionsQuery,
+  usePushDiagnosticsQuery,
   useRevokePushSubscriptionMutation,
   useSavePushSubscriptionMutation,
   useSendPushPreviewMutation,
@@ -62,6 +63,7 @@ export function PushNotificationsCard() {
     isLoading: isSubscriptionsLoading,
     refetch: refetchSubscriptions,
   } = usePushSubscriptionsQuery();
+  const { data: diagnostics } = usePushDiagnosticsQuery();
   const saveSubscription = useSavePushSubscriptionMutation();
   const revokeSubscription = useRevokePushSubscriptionMutation();
   const pushPreview = useSendPushPreviewMutation();
@@ -368,6 +370,31 @@ export function PushNotificationsCard() {
       {localError && (
         <p className="mt-3 text-sm font-semibold text-danger">{localError}</p>
       )}
+      {diagnostics ? (
+        <div className="mt-3 rounded-[16px] bg-surface-muted p-3 text-xs text-text-muted">
+          <p>
+            Aktive Geraete: <span className="font-semibold text-foreground">{diagnostics.activeSubscriptionCount}</span>
+          </p>
+          <p>
+            Push-Kanal: <span className="font-semibold text-foreground">{diagnostics.pushEnabled ? "aktiv" : "deaktiviert"}</span>
+          </p>
+          {diagnostics.lastSuccessAt ? (
+            <p>
+              Letzter erfolgreicher Push: <span className="font-semibold text-foreground">{new Date(diagnostics.lastSuccessAt).toLocaleString("de-DE")}</span>
+            </p>
+          ) : null}
+          {diagnostics.lastFailureAt ? (
+            <p>
+              Letzter Push-Fehler: <span className="font-semibold text-danger">{new Date(diagnostics.lastFailureAt).toLocaleString("de-DE")}</span>
+            </p>
+          ) : null}
+          {diagnostics.lastFailureReason ? (
+            <p>
+              Fehlergrund: <span className="font-semibold text-danger">{diagnostics.lastFailureReason}</span>
+            </p>
+          ) : null}
+        </div>
+      ) : null}
       {pushPreview.isSuccess && pushPreview.data && (
         <p className="mt-2 text-sm text-success">
           Push-Benachrichtigung gesendet ({pushPreview.data.successCount} erfolgreich,{" "}

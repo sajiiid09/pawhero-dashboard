@@ -1,6 +1,36 @@
 /// <reference lib="webworker" />
 
 const NOTIFICATION_ICON = "/icon-192.png";
+const CHECK_IN_CATEGORY = "check_in";
+const EMERGENCY_PROFILE_CATEGORY = "emergency_profile";
+
+function resolveNotificationUrl(rawUrl, category) {
+  if (!rawUrl) {
+    if (category === "generic") {
+      return new URL("/dashboard", self.location.origin).href;
+    }
+    return null;
+  }
+
+  try {
+    const parsedUrl = new URL(rawUrl, self.location.origin);
+    if (parsedUrl.origin !== self.location.origin) {
+      return null;
+    }
+    if (category === CHECK_IN_CATEGORY && !parsedUrl.pathname.startsWith("/c/")) {
+      return null;
+    }
+    if (
+      category === EMERGENCY_PROFILE_CATEGORY &&
+      !parsedUrl.pathname.startsWith("/s/")
+    ) {
+      return null;
+    }
+    return parsedUrl.href;
+  } catch {
+    return null;
+  }
+}
 
 self.addEventListener("install", (event) => {
   event.waitUntil(self.skipWaiting());
@@ -18,7 +48,8 @@ self.addEventListener("fetch", (event) => {
 self.addEventListener("push", (event) => {
   let title = "Pfoten-Held";
   let body = "Du hast eine neue Benachrichtigung.";
-  let url = "/dashboard";
+  let rawUrl = null;
+  let category = "generic";
   let tag;
   let renotify = false;
   let requireInteraction = true;
@@ -28,13 +59,19 @@ self.addEventListener("push", (event) => {
     if (data) {
       title = data.title || title;
       body = data.body || body;
-      url = data.url || url;
+      rawUrl = data.url || rawUrl;
+      category = data.category || category;
       tag = data.tag || tag;
       renotify = data.renotify ?? renotify;
       requireInteraction = data.requireInteraction ?? requireInteraction;
     }
   } catch {
-    // Payload was not JSON — use defaults.
+    console.error("push payload parse failed; notification will use fail-closed routing");
+  }
+
+  const resolvedUrl = resolveNotificationUrl(rawUrl, category);
+  if (category !== "generic" && resolvedUrl === null) {
+    console.error("typed push payload missing valid route", { category, rawUrl });
   }
 
   event.waitUntil(
@@ -44,8 +81,8 @@ self.addEventListener("push", (event) => {
       tag,
       renotify,
       requireInteraction,
-      navigate: url,
-      data: { url },
+      ...(resolvedUrl ? { navigate: resolvedUrl } : {}),
+      data: { url: resolvedUrl, category },
     }),
   );
 });
@@ -53,18 +90,21 @@ self.addEventListener("push", (event) => {
 self.addEventListener("notificationclick", (event) => {
   event.notification.close();
 
-  const targetUrl =
-    event.notification.data?.url || event.notification.navigate || "/dashboard";
-  const appUrl = new URL(targetUrl, self.location.origin).href;
+  const category = event.notification.data?.category || "generic";
+  const targetUrl = resolveNotificationUrl(event.notification.data?.url, category);
+  if (targetUrl === null) {
+    console.error("notification click blocked due to invalid typed route", { category });
+    return;
+  }
 
   event.waitUntil(
     self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((clientList) => {
       for (const client of clientList) {
-        if (client.url === appUrl && "focus" in client) {
+        if (client.url === targetUrl && "focus" in client) {
           return client.focus();
         }
       }
-      return self.clients.openWindow(appUrl);
+      return self.clients.openWindow(targetUrl);
     }),
   );
 });
