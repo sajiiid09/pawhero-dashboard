@@ -39,7 +39,14 @@ def test_pending_dispatch_creates_push_and_email_once(monkeypatch, test_database
     deliveries: list[tuple[str, str, str]] = []
     push_deliveries: list[tuple[str, str, str, str]] = []
 
-    def fake_send_email(*, to: str, subject: str, body: str) -> None:
+    def fake_send_email(
+        *,
+        to: str,
+        subject: str,
+        body: str,
+        html_body: str | None = None,
+    ) -> None:
+        del html_body
         deliveries.append((to, subject, body))
 
     def fake_send_push(session, owner_id, title, body, url="/dashboard", **kwargs):
@@ -94,7 +101,14 @@ def test_escalation_dispatch_emails_owner_then_contacts_with_public_link(
     push_deliveries: list[tuple[str, str, str, str]] = []
     contact_push_deliveries: list[tuple[str, str, str, str]] = []
 
-    def fake_send_email(*, to: str, subject: str, body: str) -> None:
+    def fake_send_email(
+        *,
+        to: str,
+        subject: str,
+        body: str,
+        html_body: str | None = None,
+    ) -> None:
+        del html_body
         deliveries.append((to, subject, body))
 
     def fake_send_push(session, owner_id, title, body, url="/dashboard", **kwargs):
@@ -227,7 +241,14 @@ def test_pending_dispatch_retries_failed_owner_push_until_success(
     ]
     push_calls: list[tuple[str, str, str, str]] = []
 
-    def fake_send_email(*, to: str, subject: str, body: str) -> None:
+    def fake_send_email(
+        *,
+        to: str,
+        subject: str,
+        body: str,
+        html_body: str | None = None,
+    ) -> None:
+        del html_body
         deliveries.append((to, subject, body))
 
     def fake_send_push(session, owner_id, title, body, url="/dashboard", **kwargs):
@@ -282,7 +303,14 @@ def test_escalation_dispatch_retries_failed_owner_push_until_success(
     ]
     push_calls: list[tuple[str, str, str, str]] = []
 
-    def fake_send_email(*, to: str, subject: str, body: str) -> None:
+    def fake_send_email(
+        *,
+        to: str,
+        subject: str,
+        body: str,
+        html_body: str | None = None,
+    ) -> None:
+        del html_body
         deliveries.append((to, subject, body))
 
     def fake_send_push(session, owner_id, title, body, url="/dashboard", **kwargs):
@@ -340,8 +368,14 @@ def test_owner_acknowledgment_stops_further_pending_push_retries(
     del test_database_url
     push_calls: list[str] = []
 
-    def fake_send_email(*, to: str, subject: str, body: str) -> None:
-        del to, subject, body
+    def fake_send_email(
+        *,
+        to: str,
+        subject: str,
+        body: str,
+        html_body: str | None = None,
+    ) -> None:
+        del to, subject, body, html_body
 
     def fake_send_push(session, owner_id, title, body, url="/dashboard", **kwargs):
         del session, owner_id, title, body, url, kwargs
@@ -373,7 +407,14 @@ def test_owner_acknowledgment_stops_further_pending_push_retries(
 def test_public_acknowledgment_logs_owner_notification(client, auth_headers, monkeypatch):
     deliveries: list[tuple[str, str, str]] = []
 
-    def fake_send_email(*, to: str, subject: str, body: str) -> None:
+    def fake_send_email(
+        *,
+        to: str,
+        subject: str,
+        body: str,
+        html_body: str | None = None,
+    ) -> None:
+        del html_body
         deliveries.append((to, subject, body))
 
     monkeypatch.setattr("app.services.notification_dispatcher.send_email", fake_send_email)
@@ -435,7 +476,14 @@ def test_pending_dispatch_respects_push_disabled(monkeypatch, test_database_url:
     del test_database_url
     deliveries: list[tuple[str, str, str]] = []
 
-    def fake_send_email(*, to: str, subject: str, body: str) -> None:
+    def fake_send_email(
+        *,
+        to: str,
+        subject: str,
+        body: str,
+        html_body: str | None = None,
+    ) -> None:
+        del html_body
         deliveries.append((to, subject, body))
 
     monkeypatch.setattr("app.services.notification_dispatcher.send_email", fake_send_email)
@@ -484,7 +532,14 @@ def test_pending_dispatch_respects_email_disabled(monkeypatch, test_database_url
     del test_database_url
     deliveries: list[tuple[str, str, str]] = []
 
-    def fake_send_email(*, to: str, subject: str, body: str) -> None:
+    def fake_send_email(
+        *,
+        to: str,
+        subject: str,
+        body: str,
+        html_body: str | None = None,
+    ) -> None:
+        del html_body
         deliveries.append((to, subject, body))
 
     monkeypatch.setattr("app.services.notification_dispatcher.send_email", fake_send_email)

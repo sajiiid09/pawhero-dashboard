@@ -115,7 +115,7 @@ def _notify_owner_about_responder_ack(
         return
 
     settings = get_settings()
-    subject, body = build_responder_ack_email(
+    content = build_responder_ack_email(
         owner_name=owner.display_name,
         responder_name=responder_name,
         pet_name=pet_name,
@@ -125,7 +125,12 @@ def _notify_owner_about_responder_ack(
     status_value = "sent"
     error_message = None
     try:
-        send_email(to=owner.email, subject=subject, body=body)
+        send_email(
+            to=owner.email,
+            subject=content.subject,
+            body=content.text_body,
+            html_body=content.html_body,
+        )
     except Exception as exc:
         status_value = "failed"
         error_message = str(exc)[:500]
