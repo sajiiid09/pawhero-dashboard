@@ -22,6 +22,7 @@ from app.services.auth import generate_id
 from app.services.check_in import EscalationMode, compute_escalation_state
 from app.services.contact_push import send_push_to_contact
 from app.services.email import (
+    EmailContent,
     build_emergency_contact_escalation_email,
     build_owner_escalation_email,
     build_reminder_email,
@@ -162,7 +163,7 @@ def _send_pending_notifications(session: Session, config: CheckInConfig) -> None
         )
         is None
     ):
-        subject, body = build_reminder_email(
+        content = build_reminder_email(
             owner.display_name,
             settings.app_url,
             include_push_note=config.push_enabled,
@@ -174,8 +175,7 @@ def _send_pending_notifications(session: Session, config: CheckInConfig) -> None
             recipient_email=owner.email,
             channel=NotificationChannel.EMAIL,
             notification_type=NotificationType.OWNER_REMINDER,
-            subject=subject,
-            body=body,
+            content=content,
         )
         did_change = True
 
@@ -219,7 +219,7 @@ def _send_escalation_alerts(
             statuses=("sent",),
         )
         if not owner_alerts:
-            subject, body = build_owner_escalation_email(
+            content = build_owner_escalation_email(
                 owner_name=owner.display_name,
                 pet_name=primary_pet.name,
                 app_url=settings.app_url,
@@ -233,8 +233,7 @@ def _send_escalation_alerts(
                 recipient_email=owner.email,
                 channel=NotificationChannel.EMAIL,
                 notification_type=NotificationType.OWNER_ESCALATION,
-                subject=subject,
-                body=body,
+                content=content,
             )
             did_change = True
 
@@ -304,7 +303,7 @@ def _send_escalation_alerts(
         return
 
     contact, _entry = contacts[next_index]
-    subject, body = build_emergency_contact_escalation_email(
+    content = build_emergency_contact_escalation_email(
         contact_name=contact.name,
         owner_name=owner.display_name,
         pet_name=primary_pet.name,
@@ -319,8 +318,7 @@ def _send_escalation_alerts(
         recipient_email=contact.email,
         channel=NotificationChannel.EMAIL,
         notification_type=NotificationType.EMERGENCY_CONTACT_ESCALATION,
-        subject=subject,
-        body=body,
+        content=content,
     )
 
     # Also send push to the contact if they have registered devices.
@@ -438,15 +436,19 @@ def _send_email_notification(
     recipient_email: str,
     channel: NotificationChannel,
     notification_type: NotificationType,
-    subject: str,
-    body: str,
+    content: EmailContent,
     escalation_event_id: str | None = None,
 ) -> None:
     status = "sent"
     error_message = None
 
     try:
-        send_email(to=recipient_email, subject=subject, body=body)
+        send_email(
+            to=recipient_email,
+            subject=content.subject,
+            body=content.text_body,
+            html_body=content.html_body,
+        )
     except Exception as exc:
         status = "failed"
         error_message = str(exc)[:500]
