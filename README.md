@@ -1,36 +1,55 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# PawHero
 
-## Getting Started
+## Summary
+Full-stack pet emergency management dashboard. FastAPI backend with JWT auth, Next.js 16 frontend with TanStack Query. German-language UI.
 
-First, run the development server:
+## Auth
+- JWT-based owner auth: register/login at `POST /auth/register`, `POST /auth/login`
+- `OwnerId` dependency in `app/api/dependencies.py` extracts owner_id from Bearer token
+- Frontend auth context in `src/features/auth/auth-context.tsx`, token stored in localStorage
+- Route protection: `(app)/layout.tsx` redirects unauthenticated users to `/login`
+- Public tokenized emergency profiles: `GET /public/emergency-profile/{token}` — no auth
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+## Backend Layering
+`api/routes/` → `services/` → `repositories/` → `db/models.py`
+- All routes are owner-scoped via `OwnerId` dependency
+- Auth service: `app/services/auth.py` (password hashing, JWT, ID generation)
+- Schemas: Pydantic models in `app/schemas/` (one file per domain)
+- Config: `app/core/config.py` via pydantic-settings
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Frontend Data Flow
+- API client: `src/lib/api-client.ts` — all backend calls through `apiRequest()`, auto-attaches auth token
+- Server state: TanStack React Query (staleTime 10s). Hooks in `src/features/app/hooks.ts`
+- Feature domains: `src/features/{auth,dashboard,pets,emergency-chain,check-in,emergency-profile}/`
+- Shared app state: `src/features/app/` — types, API functions, hooks, query keys
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Styling
+- Tailwind v4 (CSS-first config, no `tailwind.config.ts`)
+- Color system: soft blue primary, green success, orange timing, warm red emergency
+- Framer Motion for page transitions, list animations, modals
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Check-In Engine
+- **On-demand escalation**: no background scheduler. State computed from `next_scheduled_at + escalation_delay_minutes` vs current time via `compute_escalation_state()` in `app/services/check_in.py`
+- **State machine**: `NORMAL` → `PENDING` (check-in overdue) → `ESCALATED` (escalation delay exceeded)
+- **Acknowledge flow**: `POST /check-in/acknowledge` records missed event (if overdue), resolves active escalation, creates acknowledged event, resets timer
+- **EscalationEvent model**: tracks start/resolve timestamps per owner, lazily created when escalated state detected
+- **Frontend polling**: Dashboard re-fetches every 60s via TanStack Query staleTime. "Ich bin okay" button triggers acknowledge mutation, invalidates dashboard + config + events + escalation queries
+- **Deadline countdown**: `formatDeadlineCountdown()` in `view-model.ts` shows "Eskalation in X Min" (pending) or "Seit X Min eskaliert" (escalated), guarded by `useHydrated()` to avoid hydration mismatch
+- **Danger tone**: `NextCheckInCountdown` applies `text-danger font-bold` when overdue
 
-## Learn More
+## Notifications
+- **APScheduler** in-process background scheduler runs every 60s, starts/stops with FastAPI lifespan
+- **Dispatcher**: checks all owners with CheckInConfig, sends reminder email on PENDING, sequential escalation alerts on ESCALATED
+- **Sequential fallback**: emergency contacts notified one-by-one in priority order, 5-min gap between each
+- **Email**: SMTP via Python stdlib (`smtplib`), plain text German templates, TLS on port 587
+- **Dedup**: NotificationLog queried before sending — no duplicate reminders per cycle, no duplicate alerts per escalation per contact
+- **NotificationLog model**: delivery audit trail — recipient, type (reminder/escalation_alert), status (sent/failed), error message
+- **Frontend**: notification history card on check-in page shows all sent/failed notifications
 
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## Emergency Contact Experience
+- **Public profile** (`/s/[token]`): tokenized access, no auth required. Shows pet image, basic info, address, spare key location, feeding notes, contact capabilities, medical record
+- **Escalation banner**: when escalation active, shows urgency context (minutes since escalation, acknowledgment count)
+- **Responder acknowledgment**: `POST /public/emergency-profile/{token}/acknowledge` — responders confirm they're handling the situation via email-based form. Idempotent (dedup by email). Triggers email notification to owner
+- **ResponderAcknowledgment model**: tracks who responded, when, linked to escalation event and pet
+- **Contact capabilities**: `hasApartmentKey`, `canTakeDog`, `notes` shown as badges/inline text on public profile
+- **Mobile-first**: responsive font sizes, larger touch targets, single-column on small screens
